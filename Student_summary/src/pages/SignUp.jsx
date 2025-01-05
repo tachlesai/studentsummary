@@ -12,17 +12,42 @@ function SignUp() {
     confirmPassword: ''
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log('Form submitted', formData);
+
     if (formData.password !== formData.confirmPassword) {
       alert('הסיסמאות אינן תואמות');
       return;
     }
-    // כאן תתווסף לוגיקת ההרשמה
-    console.log('נתוני הרשמה:', formData);
-    
-    // ניווט לדף ההצלחה
-    navigate('/signup-success');
+
+    try {
+      console.log('Sending request to server...');
+      const response = await fetch('http://localhost:5001/api/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName
+        })
+      });
+
+      console.log('Response received:', response);
+
+      if (response.ok) {
+        navigate('/signup-success');
+      } else {
+        const data = await response.json();
+        alert(data.message || 'שגיאה בהרשמה');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('שגיאה בהרשמה');
+    }
   };
 
   const handleChange = (e) => {
