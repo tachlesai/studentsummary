@@ -40,7 +40,11 @@ const HowItWorks = () => {
         ))}
       </div>
       
-      <button className="cta-button">תתחיל ללמוד קשה →</button>
+      <div className="flex justify-center">
+        <button className="cta-button px-6 py-3 text-base font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 w-64">
+          תתחיל ללמוד קשה →
+        </button>
+      </div>
     </section>
   );
 };
