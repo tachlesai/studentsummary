@@ -9,6 +9,7 @@ import StudentStories from './components/StudentStories';
 import Footer from './components/Footer';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
+import SignupSuccess from './pages/SignupSuccess';
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
         } />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/signup-success" element={<SignupSuccess />} />
       </Routes>
     </Router>
   );
