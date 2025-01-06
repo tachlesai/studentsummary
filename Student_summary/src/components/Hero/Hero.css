@@ -11,8 +11,7 @@
   margin: 0 auto;
   padding: 0 2rem;
   display: grid;
-  /* comment out this line temporarily */
-  /* grid-template-columns: 1fr 1fr; */
+  grid-template-columns: 1fr 1fr;
   gap: 4rem;
   align-items: center;
 }
@@ -66,6 +65,7 @@
   width: 100%;
   min-height: 400px;
   overflow: hidden;
+  transform: translateX(-2rem);
 }
 
 .hero-image {
