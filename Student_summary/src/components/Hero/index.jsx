@@ -7,8 +7,8 @@ const Hero = () => {
   return (
     <div className="hero-container">
       <div className="hero-content">
-        <HeroImage />
         <HeroText />
+        <HeroImage />
       </div>
     </div>
   );
