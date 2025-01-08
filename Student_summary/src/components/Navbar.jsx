@@ -53,7 +53,7 @@ const Navbar = () => {
     <nav className="bg-white py-4 px-6 fixed w-full top-0 z-50">
       <div className="max-w-7xl mx-auto flex justify-between items-center">
         <div className="flex items-center gap-12">
-          <a href="/" className="text-[22px] font-bold text-indigo-600">KalilAI</a>
+          <a href="/" className="text-[22px] font-bold text-indigo-600">TachelsAI</a>
           <div className="flex gap-8">
             <a href="#features" className="text-gray-600 hover:text-indigo-600">יכולות</a>
             <a href="#solutions" className="text-gray-600 hover:text-indigo-600">פתרונות</a>
