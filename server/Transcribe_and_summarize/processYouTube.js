@@ -4,6 +4,8 @@ import OpenAI from 'openai';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
+import PDFDocument from 'pdfkit';
+import { createWriteStream } from 'fs';
 
 const execAsync = promisify(exec);
 
@@ -57,54 +59,25 @@ async function transcribeAudio(filePath) {
       
       // Try Hebrew first
       try {
-        console.log(`Running Whisper command: whisper "${segment}" --model large-v3 --language he`);
+        console.log(`Processing segment ${index + 1}/${segments.length} in Hebrew...`);
         const { stdout: hebrewStdout, stderr: hebrewStderr } = await execAsync(
-          `whisper "${segment}" --model large-v3 --language he`,
-          { maxBuffer: 1024 * 1024 * 10 } // Increase buffer size
+          `whisper "${segment}" --model small --language he --task transcribe`,
+          { maxBuffer: 1024 * 1024 * 10 }
         );
-        
-        console.log("Whisper output:", hebrewStdout);
-        if (hebrewStderr) {
-          console.log("Hebrew transcription warning:", hebrewStderr);
-        }
         
         // Read the Hebrew transcript
         const transcriptPath = segment.replace(/\.[^/.]+$/, ".txt");
         const hebrewTranscript = await fs.readFile(transcriptPath, 'utf8');
         
-        // If Hebrew transcript is too short, try English
-        if (hebrewTranscript.trim().length < 50) {
-          throw new Error("Short transcript");
-        }
-        
-        // Add to full transcription
+        // Always use Hebrew result
         fullTranscription += hebrewTranscript + '\n';
         
-        // Clean up segment files
+        // Clean up files
         await fs.unlink(transcriptPath);
         await fs.unlink(segment);
-        
-      } catch (hebrewError) {
-        // Try English if Hebrew fails
-        console.log(`Trying English for segment ${index + 1}...`);
-        const { stdout: englishStdout, stderr: englishStderr } = await execAsync(
-          `whisper "${segment}" --model large-v3 --language en`
-        );
-        
-        if (englishStderr) {
-          console.log("English transcription warning:", englishStderr);
-        }
-        
-        // Read the English transcript
-        const transcriptPath = segment.replace(/\.[^/.]+$/, ".txt");
-        const englishTranscript = await fs.readFile(transcriptPath, 'utf8');
-        
-        // Add to full transcription
-        fullTranscription += englishTranscript + '\n';
-        
-        // Clean up segment files
-        await fs.unlink(transcriptPath);
-        await fs.unlink(segment);
+      } catch (error) {
+        console.error(`Error processing segment ${index + 1}:`, error);
+        throw error;
       }
     }
     
@@ -133,6 +106,37 @@ async function summarizeText(text) {
   }
 }
 
+// Add this function to create PDF
+async function createSummaryPDF(summary, outputPath) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      font: 'Helvetica',
+      rtl: true  // For Hebrew text
+    });
+    
+    // Pipe PDF to file
+    const stream = doc.pipe(createWriteStream(outputPath));
+    
+    // Add title
+    doc.fontSize(20).text('סיכום הקלטה', {
+      align: 'right'
+    });
+    
+    // Add summary
+    doc.moveDown();
+    doc.fontSize(12).text(summary, {
+      align: 'right'
+    });
+    
+    // Finalize PDF
+    doc.end();
+    
+    stream.on('finish', resolve);
+    stream.on('error', reject);
+  });
+}
+
+// Modify processYouTubeVideo to create PDF
 async function processYouTubeVideo(youtubeUrl) {
   try {
     // Step 1: Download audio from YouTube
@@ -167,7 +171,16 @@ async function processYouTubeVideo(youtubeUrl) {
     await fs.unlink(audioPath);
     
     console.log("הנה הסיכום שלך:", finalSummary);
-    return finalSummary;
+    
+    // Create PDF after getting final summary
+    const pdfPath = path.join(path.dirname(audioPath), 'summary.pdf');
+    await createSummaryPDF(finalSummary, pdfPath);
+    console.log(`PDF summary created at: ${pdfPath}`);
+    
+    return {
+      summary: finalSummary,
+      pdfPath: pdfPath
+    };
   } catch (error) {
     console.error("Error processing video:", error);
     throw error;
