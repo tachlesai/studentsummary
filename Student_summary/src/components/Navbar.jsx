@@ -5,13 +5,11 @@ const Navbar = () => {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // Check localStorage when component mounts
     const userData = localStorage.getItem('user');
     if (userData) {
       setUser(JSON.parse(userData));
     }
 
-    // Listen for changes in localStorage
     const handleStorageChange = (e) => {
       if (e.key === 'user') {
         if (e.newValue) {
@@ -23,8 +21,7 @@ const Navbar = () => {
     };
 
     window.addEventListener('storage', handleStorageChange);
-    
-    // Also check for changes every second (as a backup)
+
     const interval = setInterval(() => {
       const currentUserData = localStorage.getItem('user');
       if (currentUserData) {
@@ -50,17 +47,20 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-white py-4 px-6 fixed w-full top-0 z-50">
+    <nav className="bg-white py-4 px-6 fixed w-full top-0 z-50 shadow-md">
       <div className="max-w-7xl mx-auto flex justify-between items-center">
-        <div className="flex items-center gap-12">
+        {/* Left Side */}
+        <div className="flex items-center gap-8">
           <a href="/" className="text-[22px] font-bold text-indigo-600">TachelsAI</a>
-          <div className="flex gap-8">
+          <div className="flex gap-6">
             <a href="#features" className="text-gray-600 hover:text-indigo-600">יכולות</a>
             <a href="#solutions" className="text-gray-600 hover:text-indigo-600">פתרונות</a>
             <a href="#pricing" className="text-gray-600 hover:text-indigo-600">תמחור</a>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+
+        {/* Right Side */}
+        <div className="flex items-center gap-6">
           {user ? (
             <div className="flex items-center gap-4">
               <span className="text-gray-600">שלום, {user.firstName}</span>
@@ -73,10 +73,12 @@ const Navbar = () => {
             </div>
           ) : (
             <Link to="/login">
-              <button className="text-indigo-600 hover:text-indigo-700 font-medium">התחברו</button>
+              <button className="text-indigo-600 hover:text-indigo-700 font-medium pl-12">
+                הירשמו/התחברו
+              </button>
             </Link>
           )}
-          <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+          <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center pl 12">
             <span className="text-indigo-600 text-xl">⚡</span>
           </div>
         </div>
