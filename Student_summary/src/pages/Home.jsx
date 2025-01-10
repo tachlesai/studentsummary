@@ -5,6 +5,7 @@ import HowItWorks from '../components/HowItWorks';
 import ComparisonTable from '../components/ComparisonTable';
 import StudentStories from '../components/StudentStories';
 import Footer from '../components/Footer';
+import ThenVsToday from '../components/ThenVsToday';
 
 const Home = () => {
   return (
@@ -12,7 +13,8 @@ const Home = () => {
       <Hero />
       <Features />
       <HowItWorks />
-      <ComparisonTable />
+      <ComparisonTable /> 
+      <ThenVsToday /> 
       <StudentStories />
       <Footer />
     </div>
