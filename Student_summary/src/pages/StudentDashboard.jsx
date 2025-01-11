@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Card, CardContent } from '../components/ui/card';
 
 const Dashboard = () => {
   const [dragActive, setDragActive] = useState(false);
@@ -51,8 +50,8 @@ const Dashboard = () => {
         </div>
 
         {/* Upload Area */}
-        <Card className={`border-2 border-dashed ${dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'} rounded-lg`}>
-          <CardContent className="p-12">
+        <div className={`p-6 border-2 border-dashed rounded-lg ${dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}>
+          <div className="p-12">
             <div className="flex flex-col items-center text-center space-y-6">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
                 <span className="text-2xl">⬆️</span>
@@ -85,14 +84,14 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Recent Files Section */}
         <div className="mt-8">
           <h3 className="text-lg font-medium mb-4 font-sans">קבצים אחרונים</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Card className="p-4 hover:shadow-md transition-shadow">
+            <div className="p-4 border rounded-lg shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center space-x-3 space-x-reverse">
                 <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                   📄
@@ -102,7 +101,7 @@ const Dashboard = () => {
                   <p className="text-sm text-gray-500">לפני 2 ימים</p>
                 </div>
               </div>
-            </Card>
+            </div>
           </div>
         </div>
       </div>

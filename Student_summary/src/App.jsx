@@ -6,7 +6,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import SignupSuccess from './pages/SignupSuccess';
-
+import StudentDashboard from './pages/StudentDashboard';
 
 function App() {
   return (
@@ -20,7 +20,7 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/signup-success" element={<SignupSuccess />} />
-
+              <Route path="/StudentDashboard" element={<StudentDashboard />} />
             </Routes>
           </div>
         </div>

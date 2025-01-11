@@ -6,7 +6,7 @@ import fontkit from '@pdf-lib/fontkit';
 import path from 'path';
 
 const hfApiToken = "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"; // Replace with your Hugging Face token
-const openAiApiKey = "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"; // Replace with your OpenAI API key
+const openAiApiKey = "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"
 const model = "openai/whisper-large-v3";
 const filePath = "C:/Users/shoti/Downloads/WhatsApp Audio 2024-11-27 at 16.40.50_7e005c9f.mp3";
 const openai = new OpenAI({ apiKey: openAiApiKey });
