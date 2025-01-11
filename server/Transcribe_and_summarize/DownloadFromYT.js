@@ -19,10 +19,19 @@ async function downloadAudio(link) {
     await fs.mkdir(tempDir, { recursive: true });
     
     const outputPath = path.join(tempDir, 'audio.mp3');
+    
+    // Delete existing audio file if it exists
+    try {
+      await fs.unlink(outputPath);
+      console.log('Cleaned up existing audio file');
+    } catch (err) {
+      // File doesn't exist, which is fine
+    }
+    
     console.log('Starting download...');
     console.log('Output path:', outputPath);
 
-    // Use youtube-dl-exec directly
+    // Updated configuration for yt-dlp
     await ytdl(link, {
       extractAudio: true,
       audioFormat: 'mp3',
@@ -31,11 +40,20 @@ async function downloadAudio(link) {
       noCheckCertificates: true,
       noWarnings: true,
       preferFreeFormats: true,
+      forceOverwrite: true,
       addHeader: [
         'referer:youtube.com',
-        'user-agent:Mozilla/5.0'
-      ]
+        'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      ],
+      cookies: 'cookies.txt',  // Optional: if you have a cookies file
+      format: 'bestaudio',
+      extractorArgs: ['youtube:player_client=all'],
+      concurrent: 1
     });
+
+    // Verify the file exists and is the correct one
+    const stats = await fs.stat(outputPath);
+    console.log(`Downloaded file size: ${stats.size} bytes`);
 
     console.log('Download complete!');
     return outputPath;
@@ -44,9 +62,5 @@ async function downloadAudio(link) {
     throw error;
   }
 }
-
-// Example usage
-const youtubeLink = 'https://www.youtube.com/watch?v=HQ3yZ2es_Ts';
-downloadAudio(youtubeLink);
 
 export default downloadAudio;
