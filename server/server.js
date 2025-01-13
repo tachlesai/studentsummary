@@ -184,12 +184,81 @@ app.post("/api/google-login", async (req, res) => {
 app.post("/api/process-youtube", async (req, res) => {
   try {
     const { youtubeUrl } = req.body;
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: "No authorization token provided" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userEmail = decoded.email;
+
     const result = await processYouTubeVideo(youtubeUrl);
-    res.json(result);
+    console.log('Result from processYouTubeVideo:', result); // Debug log
+
+    // Save to database with title
+    const query = `
+      INSERT INTO summaries (user_email, video_url, summary, pdf_path, title)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `;
+    
+    const values = [
+      userEmail,
+      youtubeUrl,
+      result.summary,
+      result.pdfPath,
+      result.title // Make sure this matches the property name from processYouTubeVideo
+    ];
+
+    console.log('Inserting with values:', values); // Debug log
+    
+    const dbResult = await db.query(query, values);
+    console.log('Database insert result:', dbResult.rows[0]); // Debug log
+
+    res.json({
+      summary: result.summary,
+      pdfPath: result.pdfPath,
+      title: result.title // Make sure to send title back to frontend
+    });
   } catch (error) {
     console.error('Error processing YouTube video:', error);
     res.status(500).json({ 
       message: "Error processing video",
+      error: error.message 
+    });
+  }
+});
+
+app.get("/api/summaries", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: "No authorization token provided" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userEmail = decoded.email;
+
+    // Add console.log to debug
+    console.log('Fetching summaries for user:', userEmail);
+
+    const query = `
+      SELECT id, user_email, video_url, summary, pdf_path, created_at 
+      FROM summaries 
+      WHERE user_email = $1 
+      ORDER BY created_at DESC
+    `;
+    
+    const result = await db.query(query, [userEmail]);
+    
+    // Add console.log to debug
+    console.log('Found summaries:', result.rows);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching summaries:', error);
+    res.status(500).json({ 
+      message: "Error fetching summaries",
       error: error.message 
     });
   }
