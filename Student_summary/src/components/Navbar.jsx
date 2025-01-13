@@ -9,36 +9,7 @@ const Navbar = () => {
     if (userData) {
       setUser(JSON.parse(userData));
     }
-
-    const handleStorageChange = (e) => {
-      if (e.key === 'user') {
-        if (e.newValue) {
-          setUser(JSON.parse(e.newValue));
-        } else {
-          setUser(null);
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    const interval = setInterval(() => {
-      const currentUserData = localStorage.getItem('user');
-      if (currentUserData) {
-        const parsedUser = JSON.parse(currentUserData);
-        if (JSON.stringify(parsedUser) !== JSON.stringify(user)) {
-          setUser(parsedUser);
-        }
-      } else if (user) {
-        setUser(null);
-      }
-    }, 1000);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, [user]);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
