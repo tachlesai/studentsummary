@@ -7,6 +7,7 @@ import path from 'path';
 import PDFDocument from 'pdfkit';
 import { createWriteStream } from 'fs';
 import puppeteer from 'puppeteer';
+import { fileURLToPath } from 'url';
 
 const execAsync = promisify(exec);
 
@@ -126,6 +127,12 @@ async function processYouTubeVideo(youtubeUrl) {
   try {
     console.log(`Processing YouTube video: ${youtubeUrl}`);
     
+    // Create temp directory path
+    const tempDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'temp');
+    
+    // Ensure temp directory exists
+    await fs.mkdir(tempDir, { recursive: true });
+    
     // Step 1: Download audio from YouTube
     console.log("Downloading audio from YouTube...");
     const audioPath = await downloadAudio(youtubeUrl);
@@ -138,8 +145,8 @@ async function processYouTubeVideo(youtubeUrl) {
     console.log("Summarizing content...");
     const summary = await summarizeText(transcription);
     
-    // Step 4: Create PDF
-    const pdfPath = path.join(path.dirname(audioPath), 'summary.pdf');
+    // Step 4: Create PDF in temp directory
+    const pdfPath = path.join(tempDir, 'summary.pdf');
     await createSummaryPDF(summary, pdfPath);
     console.log(`PDF summary created at: ${pdfPath}`);
     
@@ -150,7 +157,7 @@ async function processYouTubeVideo(youtubeUrl) {
     
     return {
       summary: summary,
-      pdfPath: pdfPath
+      pdfPath: '/files/summary.pdf'  // This should match the static serve path
     };
   } catch (error) {
     console.error("Error processing video:", error);
@@ -159,9 +166,9 @@ async function processYouTubeVideo(youtubeUrl) {
 }
 
 // Example usage (you can comment this out when importing the function)
-const youtubeUrl = "https://www.youtube.com/watch?v=HQ3yZ2es_Ts";
-processYouTubeVideo(youtubeUrl)
-  .then(result => console.log("Process completed successfully!"))
-  .catch(error => console.error("Process failed:", error));
+// const youtubeUrl = "https://www.youtube.com/watch?v=HQ3yZ2es_Ts";
+// processYouTubeVideo(youtubeUrl)
+//   .then(result => console.log("Process completed successfully!"))
+//   .catch(error => console.error("Process failed:", error));
 
 export default processYouTubeVideo; 
