@@ -54,7 +54,7 @@ const Navbar = () => {
           <div className="flex items-center gap-8">
             <Link to="/" className="text-[22px] font-bold text-indigo-600">TachelsAI</Link>
             <div className="flex gap-6">
-              <Link to="/youtube-summary" className="text-gray-600 hover:text-indigo-600">סיכום סרטונים</Link>
+              <Link to="/dashboard" className="text-gray-600 hover:text-indigo-600">סיכום סרטונים</Link>
               <Link to="#features" className="text-gray-600 hover:text-indigo-600">יכולות</Link>
               <Link to="#solutions" className="text-gray-600 hover:text-indigo-600">פתרונות</Link>
               <Link to="#pricing" className="text-gray-600 hover:text-indigo-600">תמחור</Link>
