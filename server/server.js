@@ -5,6 +5,13 @@ import pg from "pg";
 import dotenv from "dotenv";
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import processYouTubeVideo from './Transcribe_and_summarize/processYouTube.js';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -13,6 +20,15 @@ const PORT = process.env.PORT || 5000;
 
 app.use(express.json());
 app.use(cors());
+
+// Create temp directory if it doesn't exist
+const tempDir = path.join(__dirname, 'temp');
+if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+}
+
+// Serve static files from the temp directory
+app.use('/files', express.static(path.join(__dirname, 'temp')));
 
 const db = new pg.Client({
   user: process.env.DB_USER,
@@ -160,6 +176,20 @@ app.post("/api/google-login", async (req, res) => {
     console.error('Google login error:', error);
     res.status(500).json({ 
       message: "Internal Server Error",
+      error: error.message 
+    });
+  }
+});
+
+app.post("/api/process-youtube", async (req, res) => {
+  try {
+    const { youtubeUrl } = req.body;
+    const result = await processYouTubeVideo(youtubeUrl);
+    res.json(result);
+  } catch (error) {
+    console.error('Error processing YouTube video:', error);
+    res.status(500).json({ 
+      message: "Error processing video",
       error: error.message 
     });
   }
