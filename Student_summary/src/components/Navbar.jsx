@@ -1,85 +1,53 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
+import Features from './Features';
+import ComparisonTable from './ComparisonTable';
 
 const Navbar = () => {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-
-    const handleStorageChange = (e) => {
-      if (e.key === 'user') {
-        if (e.newValue) {
-          setUser(JSON.parse(e.newValue));
-        } else {
-          setUser(null);
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    const interval = setInterval(() => {
-      const currentUserData = localStorage.getItem('user');
-      if (currentUserData) {
-        const parsedUser = JSON.parse(currentUserData);
-        if (JSON.stringify(parsedUser) !== JSON.stringify(user)) {
-          setUser(parsedUser);
-        }
-      } else if (user) {
-        setUser(null);
-      }
-    }, 1000);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, [user]);
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
-  };
-
   return (
-    <nav className="bg-white py-4 px-6 fixed w-full top-0 z-50 shadow-md">
-      <div className="max-w-7xl mx-auto flex justify-between items-center">
-        {/* Left Side */}
-        <div className="flex items-center gap-8">
-          <a href="/" className="text-[22px] font-bold text-indigo-600">TachelsAI</a>
-          <div className="flex gap-6">
-            <a href="#features" className="text-gray-600 hover:text-indigo-600">יכולות</a>
-            <a href="#solutions" className="text-gray-600 hover:text-indigo-600">פתרונות</a>
-            <a href="#pricing" className="text-gray-600 hover:text-indigo-600">תמחור</a>
-          </div>
-        </div>
-
-        {/* Right Side */}
-        <div className="flex items-center gap-6">
-          {user ? (
-            <div className="flex items-center gap-4">
-              <span className="text-gray-600">שלום, {user.firstName}</span>
-              <button 
-                onClick={handleLogout}
-                className="text-indigo-600 hover:text-indigo-700 font-medium"
-              >
-                התנתק
-              </button>
+    <nav className="bg-white shadow-sm fixed w-full top-0 z-50">
+      <div className="container mx-auto px-6 py-4">
+        <div className="flex items-center justify-between">
+          {/* Logo & Brand */}
+          <div className="flex items-center space-x-4 space-x-reverse">
+            <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-blue-500 rounded-xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-xl">T</span>
             </div>
-          ) : (
-            <Link to="/login">
-              <button className="text-indigo-600 hover:text-indigo-700 font-medium pl-12">
-                הירשמו/התחברו
-              </button>
+            <span className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
+              TachlesAI
+            </span>
+          </div>
+
+          {/* Navigation Links */}
+          <div className="hidden md:flex items-center space-x-8 space-x-reverse mr-8">
+            <Link to="/" className="text-gray-600 hover:text-indigo-600 transition-colors">
+              דף הבית
             </Link>
-          )}
-          <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center pl 12">
-            <span className="text-indigo-600 text-xl">⚡</span>
+            <Link to="#Features" className="text-gray-600 hover:text-indigo-600 transition-colors">
+              יכולות
+            </Link>
+            <Link to="/pricing" className="text-gray-600 hover:text-indigo-600 transition-colors">
+              תמחור
+            </Link>
+            <Link to="/about" className="text-gray-600 hover:text-indigo-600 transition-colors">
+              אודות
+            </Link>
+          </div>
+
+          {/* Auth Buttons */}
+          <div className="flex items-center space-x-4 space-x-reverse">
+            <Link 
+              to="/login" 
+              className="text-gray-600 hover:text-indigo-600 transition-colors px-4 py-2"
+            >
+              התחברות
+            </Link>
+            <Link 
+              to="/signup" 
+              className="bg-indigo-600 text-white px-6 py-2 rounded-xl hover:bg-indigo-700 transition-all transform hover:scale-105 shadow-md hover:shadow-lg font-medium"
+            >
+              הרשמה
+            </Link>
           </div>
         </div>
       </div>
