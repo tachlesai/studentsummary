@@ -8,7 +8,9 @@ import { OAuth2Client } from 'google-auth-library';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import processYouTubeVideo from './Transcribe_and_summarize/processYouTube.js';
+import { transcribeAudio, summarizeText, createSummaryPDF } from './Transcribe_and_summarize/processYouTube.js';
 import fs from 'fs';
+import multer from 'multer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,6 +48,28 @@ try {
 } catch (err) {
   console.error('Database connection error:', err);
 }
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, 'temp')) // Save to temp directory
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname) // Add timestamp to filename
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    // Accept only audio files
+    if (file.mimetype.startsWith('audio/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only audio files are allowed!'));
+    }
+  }
+});
 
 app.post("/api/signup", async (req, res) => {
   const { email, password, firstName, lastName } = req.body;
@@ -259,6 +283,61 @@ app.get("/api/summaries", async (req, res) => {
     console.error('Error fetching summaries:', error);
     res.status(500).json({ 
       message: "Error fetching summaries",
+      error: error.message 
+    });
+  }
+});
+
+app.post("/api/process-audio", upload.single('audioFile'), async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: "No authorization token provided" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userEmail = decoded.email;
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const filePath = req.file.path;
+    
+    // Process the audio file using the same functions as YouTube videos
+    const transcription = await transcribeAudio(filePath);
+    const summary = await summarizeText(transcription);
+    const pdfPath = path.join(path.dirname(filePath), 'summary.pdf');
+    await createSummaryPDF(summary, pdfPath);
+
+    // Save to database
+    const query = `
+      INSERT INTO summaries (user_email, file_name, summary, pdf_path)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `;
+    
+    const values = [
+      userEmail,
+      req.file.originalname,
+      summary,
+      '/files/summary.pdf'
+    ];
+
+    const dbResult = await db.query(query, values);
+
+    // Clean up the original audio file
+    await fs.unlink(filePath);
+
+    res.json({
+      summary: summary,
+      pdfPath: '/files/summary.pdf'
+    });
+
+  } catch (error) {
+    console.error('Error processing audio file:', error);
+    res.status(500).json({ 
+      message: "Error processing audio file",
       error: error.message 
     });
   }
