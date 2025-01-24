@@ -55,7 +55,9 @@ const Navbar = () => {
         <div className="flex items-center gap-12">
           <a href="/" className="text-[22px] font-bold text-indigo-600">KalilAI</a>
           <div className="flex gap-8">
-            <a href="#features" className="text-gray-600 hover:text-indigo-600">יכולות</a>
+            {user ? (
+              <Link to="/dashboard" className="text-gray-600 hover:text-indigo-600">סיכום</Link>
+            ) : null}
             <a href="#solutions" className="text-gray-600 hover:text-indigo-600">פתרונות</a>
             <a href="#pricing" className="text-gray-600 hover:text-indigo-600">תמחור</a>
           </div>
