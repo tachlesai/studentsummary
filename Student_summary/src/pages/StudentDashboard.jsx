@@ -132,41 +132,44 @@ const Dashboard = () => {
 
   const handleYouTubeSubmit = async (e) => {
     e.preventDefault();
-    if (usageData?.membershipType === 'free' && usageData?.remainingUses <= 0) {
-      alert('You have reached your weekly limit. Please upgrade to premium for unlimited use.');
-      return;
-    }
-
-    if (!youtubeUrl) {
-      alert('Please enter a YouTube URL');
+    
+    if (!youtubeUrl || !youtubeUrl.includes('youtube.com')) {
+      alert('Please enter a valid YouTube URL');
       return;
     }
 
     setLoading(true);
-
     try {
       const token = localStorage.getItem('token');
+      
+      console.log('Sending URL:', youtubeUrl);
+      
       const response = await fetch('http://localhost:5001/api/process-youtube', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ url: youtubeUrl })
+        body: JSON.stringify({ 
+          url: youtubeUrl.trim() 
+        })
       });
 
       if (!response.ok) {
-        throw new Error('Failed to process YouTube video');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to process video');
       }
 
       const data = await response.json();
-      fetchSummaries();
-      fetchUsageStatus();
-      alert('Video processed successfully!');
-      setYoutubeUrl('');
+      navigate('/summary-result', { 
+        state: { 
+          summary: data.summary,
+          pdfPath: data.pdfPath
+        }
+      });
     } catch (error) {
       console.error('Error:', error);
-      alert('Error processing video');
+      alert(error.message || 'Error processing video');
     } finally {
       setLoading(false);
     }
@@ -220,6 +223,7 @@ const Dashboard = () => {
                   onChange={(e) => setYoutubeUrl(e.target.value)}
                   placeholder="הדבק קישור YouTube כאן..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-sans"
+                  required
                 />
                 <span className="text-gray-500 font-sans">- או -</span>
                 
