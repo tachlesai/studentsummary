@@ -55,7 +55,7 @@ export async function summarizeText(text) {
       messages: [
         { role: "user", content: `Summarize the following text in Hebrew with bulletpoints:\n\n${text}` },
       ],
-      max_tokens: 500,
+      max_tokens: 1000,
       temperature: 0.5,
     });
     return response.choices[0].message.content.trim();
