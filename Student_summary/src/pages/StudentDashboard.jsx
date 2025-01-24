@@ -10,6 +10,7 @@ const Dashboard = () => {
   const [summaries, setSummaries] = useState([]);
   const userName = "דניאל";
   const userPlan = "Pro";
+  const [file, setFile] = useState(null);
 
   const fetchSummaries = async () => {
     try {
@@ -84,6 +85,42 @@ const Dashboard = () => {
     }
   };
 
+  const handleFileUpload = async (e) => {
+    const selectedFile = e.target.files[0];
+    if (!selectedFile) return;
+    
+    try {
+      setLoading(true);
+      const formData = new FormData();
+      formData.append('audioFile', selectedFile);
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5001/api/process-audio', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+      
+      const data = await response.json();
+      await fetchSummaries();
+      navigate('/summary-result', {
+        state: {
+          summary: data.summary,
+          pdfPath: data.pdfPath
+        }
+      });
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error processing file. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white text-gray-800 rtl font-sans" dir="rtl">
       {/* Welcome and Plan Status */}
@@ -117,12 +154,25 @@ const Dashboard = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-sans"
                 />
                 <span className="text-gray-500 font-sans">- או -</span>
+                
+                <input
+                  type="file"
+                  onChange={handleFileUpload}
+                  accept="audio/*"
+                  className="w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-full file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-50 file:text-blue-700
+                    hover:file:bg-blue-100"
+                />
+                
                 <button 
                   type="submit"
-                  disabled={loading || !youtubeUrl}
-                  className={`px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full font-sans ${loading || !youtubeUrl ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={loading || (!youtubeUrl && !file)}
+                  className={`px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full font-sans ${loading || (!youtubeUrl && !file) ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  {loading ? 'מעבד...' : 'עבד סרטון'}
+                  {loading ? 'מעבד...' : 'עבד קובץ'}
                 </button>
               </form>
 
