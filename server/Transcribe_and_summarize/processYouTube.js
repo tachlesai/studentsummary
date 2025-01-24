@@ -11,7 +11,7 @@ const execAsync = promisify(exec);
 
 const openai = new OpenAI({ apiKey: "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" });
 
-async function transcribeAudio(filePath) {
+export async function transcribeAudio(filePath) {
   try {
     console.log("Starting transcription with Whisper Small...");
     console.log(`Running Whisper command: whisper "${filePath}" --model small --language he --output_dir "${path.dirname(filePath)}"`);
@@ -48,7 +48,7 @@ async function transcribeAudio(filePath) {
   }
 }
 
-async function summarizeText(text) {
+export async function summarizeText(text) {
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4",
@@ -65,7 +65,7 @@ async function summarizeText(text) {
   }
 }
 
-async function createSummaryPDF(summary, outputPath) {
+export async function createSummaryPDF(summary, outputPath) {
   try {
     const html = `
       <!DOCTYPE html>
