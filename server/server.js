@@ -12,6 +12,7 @@ import { transcribeAudio, summarizeText, createSummaryPDF } from './Transcribe_a
 import { unlink } from 'fs/promises';
 import multer from 'multer';
 import { existsSync, mkdirSync } from 'fs';
+import PDFDocument from 'pdfkit';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -299,7 +300,15 @@ app.post("/api/google-login", async (req, res) => {
 
 app.post("/api/process-youtube", async (req, res) => {
   try {
-    const { youtubeUrl } = req.body;
+    const { url } = req.body;
+    
+    // Add validation
+    if (!url || url.trim() === '') {
+      return res.status(400).json({ error: 'No URL provided' });
+    }
+
+    console.log('Received URL:', url); // Add this log
+    
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {
       return res.status(401).json({ message: "No authorization token provided" });
@@ -308,7 +317,7 @@ app.post("/api/process-youtube", async (req, res) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userEmail = decoded.email;
 
-    const result = await processYouTubeVideo(youtubeUrl);
+    const result = await processYouTubeVideo(url);
     
     // Save to database with title
     const query = `
@@ -319,7 +328,7 @@ app.post("/api/process-youtube", async (req, res) => {
     
     await db.query(query, [
       userEmail,
-      youtubeUrl,
+      url,
       result.summary,
       result.pdfPath,
       result.title
@@ -328,10 +337,7 @@ app.post("/api/process-youtube", async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error processing YouTube video:', error);
-    res.status(500).json({ 
-      message: "Error processing video",
-      error: error.message 
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -476,3 +482,46 @@ app.get("/api/usage-status", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+const generatePDF = async (summary, title) => {
+  const doc = new PDFDocument({
+    size: 'A4',
+    margin: 50,
+    lang: 'he'
+  });
+
+  // Set RTL mode
+  doc.font('Helvetica');
+  doc.text('', 0, 0, { align: 'right' });
+
+  // Add title
+  doc.fontSize(20)
+     .text(title || 'סיכום', { align: 'right' })
+     .moveDown(2);
+
+  // Format the summary text with proper line breaks
+  const lines = summary
+    .split('-')  // Split by bullet points
+    .filter(line => line.trim())  // Remove empty lines
+    .map(line => line.trim());  // Clean up whitespace
+
+  // Add each line as a bullet point
+  doc.fontSize(12);
+  let y = 150; // Starting y position after title
+
+  lines.forEach((line) => {
+    // Add bullet point and text
+    doc.text(`• ${line}`, {
+      align: 'right',
+      width: 500,
+      continued: false,
+      indent: 30
+    });
+    
+    // Force move to next line with extra spacing
+    y += 30; // Increase y position for next line
+    doc.y = y;
+  });
+
+  return doc;
+};

@@ -15,7 +15,7 @@
     "axios": "^1.7.9",
     "fontkit": "^2.0.4",
     "fs": "^0.0.1-security",
-    "lucide-react": "^0.471.0",
+    "lucide-react": "^0.471.2",
     "openai": "^4.77.0",
     "pdf-lib": "^1.17.1",
     "prop-types": "^15.8.1",
