@@ -13,6 +13,7 @@ import { unlink } from 'fs/promises';
 import multer from 'multer';
 import { existsSync, mkdirSync } from 'fs';
 import PDFDocument from 'pdfkit';
+import { createClient } from '@deepgram/sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,6 +44,10 @@ const db = new pg.Client({
 });
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Add Deepgram configuration
+const deepgramApiKey = '4c49363a81b1798d6402a3224e7b526e4d5ce0f4';
+const deepgram = createClient(deepgramApiKey);
 
 try {
   await db.connect();
@@ -376,64 +381,48 @@ app.get("/api/summaries", async (req, res) => {
   }
 });
 
-app.post("/api/process-audio", upload.single('audioFile'), async (req, res) => {
+app.post('/api/process-audio', upload.single('audioFile'), async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({ message: "No authorization token provided" });
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: 'No audio file uploaded' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userEmail = decoded.email;
+    // Read the file buffer
+    const audioBuffer = file.buffer;
 
-    // Check usage limits
-    const usageCheck = await checkAndUpdateUsage(userEmail);
-    if (!usageCheck.allowed) {
-      return res.status(403).json({ message: usageCheck.message });
+    // Use Deepgram instead of Whisper
+    const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
+      audioBuffer,
+      {
+        model: 'whisper-large',
+        language: 'he',
+        smart_format: true,
+      }
+    );
+
+    if (error) {
+      console.error('Deepgram error:', error);
+      return res.status(500).json({ error: 'Error transcribing audio' });
     }
 
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
-    }
+    const transcript = result.results.channels[0].alternatives[0].transcript;
 
-    const filePath = req.file.path;
+    // Save to database and generate PDF as before
+    const summary = await generateSummary(transcript);
+    const pdfPath = await generatePDF(summary);
     
-    // Process the audio file using the same functions as YouTube videos
-    const transcription = await transcribeAudio(filePath);
-    const summary = await summarizeText(transcription);
-    const pdfPath = path.join(path.dirname(filePath), 'summary.pdf');
-    await createSummaryPDF(summary, pdfPath);
-
     // Save to database
-    const query = `
-      INSERT INTO summaries (user_email, file_name, summary, pdf_path)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
-    `;
-    
-    const values = [
-      userEmail,
-      req.file.originalname,
-      summary,
-      '/files/summary.pdf'
-    ];
+    const userId = getUserIdFromToken(req);
+    await db.query(
+      'INSERT INTO summaries (user_id, summary, pdf_path) VALUES ($1, $2, $3)',
+      [userId, summary, pdfPath]
+    );
 
-    const dbResult = await db.query(query, values);
-
-    // Clean up the original audio file using the promise version
-    await unlink(filePath);
-
-    res.json({
-      summary: summary,
-      pdfPath: '/files/summary.pdf'
-    });
-
+    res.json({ summary, pdfPath });
   } catch (error) {
-    console.error('Error processing audio file:', error);
-    res.status(500).json({ 
-      message: "Error processing audio file",
-      error: error.message 
-    });
+    console.error('Error:', error);
+    res.status(500).json({ error: 'Error processing audio file' });
   }
 });
 
