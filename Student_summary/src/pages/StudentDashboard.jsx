@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '../components/ui/card';
 import { useNavigate } from 'react-router-dom';
 import UsageStatus from '../components/UsageStatus';
+import Navbar from '../components/Navbar';
 
-const Dashboard = () => {
+const StudentDashboard = () => {
   const navigate = useNavigate();
   const [dragActive, setDragActive] = useState(false);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [summaries, setSummaries] = useState([]);
-  const userName = "דניאל";
+  const [user, setUser] = useState(null);
   const userPlan = "Pro";
   const [file, setFile] = useState(null);
   const [usageData, setUsageData] = useState(null);
@@ -23,6 +24,11 @@ const Dashboard = () => {
     }
     fetchSummaries();
     fetchUsageStatus();
+    // Get user data from localStorage
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
   }, [navigate]);
 
   const fetchSummaries = async () => {
@@ -177,10 +183,12 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-white text-gray-800 rtl font-sans" dir="rtl">
-      {/* Welcome and Plan Status */}
+      <Navbar />
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-2xl font-semibold font-sans">שלום {userName}, כיף לראות אותך שוב</h2>
+          <h1 className="text-2xl font-bold">
+            {user ? `שלום, ${user.firstName}` : 'שלום, אורח'}
+          </h1>
           <div className="flex items-center space-x-2 space-x-reverse bg-blue-50 px-4 py-2 rounded-full">
             <span className="text-yellow-500">👑</span>
             <span className="font-medium font-sans">
@@ -304,4 +312,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default StudentDashboard;
