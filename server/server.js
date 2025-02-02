@@ -14,6 +14,9 @@ import multer from 'multer';
 import { existsSync, mkdirSync } from 'fs';
 import PDFDocument from 'pdfkit';
 import { createClient } from '@deepgram/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import fs from 'fs';
+import puppeteer from 'puppeteer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,6 +51,9 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 // Add Deepgram configuration
 const deepgramApiKey = '4c49363a81b1798d6402a3224e7b526e4d5ce0f4';
 const deepgram = createClient(deepgramApiKey);
+
+// Configure Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 try {
   await db.connect();
@@ -409,7 +415,7 @@ app.post('/api/process-audio', upload.single('audioFile'), async (req, res) => {
     const transcript = result.results.channels[0].alternatives[0].transcript;
 
     // Save to database and generate PDF as before
-    const summary = await generateSummary(transcript);
+    const summary = await summarizeText(transcript);
     const pdfPath = await generatePDF(summary);
     
     // Save to database
@@ -473,44 +479,72 @@ app.listen(PORT, () => {
 });
 
 const generatePDF = async (summary, title) => {
-  const doc = new PDFDocument({
-    size: 'A4',
-    margin: 50,
-    lang: 'he'
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+  
+  // Convert summary to HTML with proper RTL and styling
+  const points = summary
+    .split('-')
+    .map(point => point.trim())
+    .filter(point => point.length > 0);
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        @page {
+          margin: 50px;
+        }
+        body {
+          font-family: Arial, sans-serif;
+          padding: 40px;
+          direction: rtl;
+          line-height: 1.6;
+        }
+        h1 {
+          font-size: 24px;
+          margin-bottom: 30px;
+          text-align: right;
+        }
+        .points-container {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+        .point {
+          font-size: 14px;
+          text-align: right;
+          padding-right: 20px;
+          position: relative;
+          display: block;
+          margin-bottom: 15px;
+          page-break-inside: avoid;
+        }
+        .point::before {
+          content: "•";
+          position: absolute;
+          right: 0;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>${title || 'סיכום'}</h1>
+      <div class="points-container">
+        ${points.map(point => `<div class="point">${point}</div>`).join('')}
+      </div>
+    </body>
+    </html>
+  `;
+
+  await page.setContent(htmlContent);
+  const pdf = await page.pdf({
+    format: 'A4',
+    printBackground: true,
+    margin: { top: '50px', bottom: '50px', left: '50px', right: '50px' }
   });
 
-  // Set RTL mode
-  doc.font('Helvetica');
-  doc.text('', 0, 0, { align: 'right' });
-
-  // Add title
-  doc.fontSize(20)
-     .text(title || 'סיכום', { align: 'right' })
-     .moveDown(2);
-
-  // Format the summary text with proper line breaks
-  const lines = summary
-    .split('-')  // Split by bullet points
-    .filter(line => line.trim())  // Remove empty lines
-    .map(line => line.trim());  // Clean up whitespace
-
-  // Add each line as a bullet point
-  doc.fontSize(12);
-  let y = 150; // Starting y position after title
-
-  lines.forEach((line) => {
-    // Add bullet point and text
-    doc.text(`• ${line}`, {
-      align: 'right',
-      width: 500,
-      continued: false,
-      indent: 30
-    });
-    
-    // Force move to next line with extra spacing
-    y += 30; // Increase y position for next line
-    doc.y = y;
-  });
-
-  return doc;
+  await browser.close();
+  return pdf;
 };
