@@ -248,15 +248,139 @@ if (fs.existsSync(distPath)) {
   console.log('Dist directory does not exist');
 }
 
-// For any other request, send the React app's index.html
-app.get('*', (req, res) => {
-  const indexPath = path.join(distPath, 'index.html');
-  console.log('Fallback to index.html for path:', req.path);
-  
-  if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.status(404).send('index.html not found');
+// Add this near the top of your file, after the imports
+const logRequest = (req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+};
+
+// Add this middleware to log all requests
+app.use(logRequest);
+
+// Set up multer for file uploads
+const uploadDir = path.join(__dirname, 'uploads');
+if (!existsSync(uploadDir)) {
+  mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ storage: storage });
+
+// Modify the process-audio endpoint to add more detailed error handling
+app.post('/api/process-audio', upload.single('audioFile'), async (req, res) => {
+  console.log('Process audio endpoint called');
+  try {
+    // Check if file was uploaded
+    if (!req.file) {
+      console.log('No file uploaded');
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+    
+    console.log('File uploaded:', req.file.path);
+    
+    // Get user ID from JWT token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('Unauthorized - no valid auth header');
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    } catch (error) {
+      console.log('JWT verification failed:', error.message);
+      return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+    
+    const userId = decoded.userId;
+    console.log('User ID from token:', userId);
+    
+    // Check if user exists
+    const userResult = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    
+    if (userResult.rows.length === 0) {
+      console.log('User not found:', userId);
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    const user = userResult.rows[0];
+    console.log('User found:', user.email);
+    
+    // Check usage limits
+    const summariesResult = await db.query('SELECT COUNT(*) FROM summaries WHERE user_id = $1', [userId]);
+    const summaryCount = parseInt(summariesResult.rows[0].count);
+    console.log('Summary count:', summaryCount);
+    
+    let usageLimit = 5; // Default for free tier
+    if (user.membership_type === 'premium') {
+      usageLimit = 100;
+    } else if (user.membership_type === 'unlimited') {
+      usageLimit = Infinity;
+    }
+    console.log('Usage limit:', usageLimit);
+    
+    if (summaryCount >= usageLimit) {
+      console.log('Usage limit reached');
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Usage limit reached. Please upgrade your membership to continue.' 
+      });
+    }
+    
+    // Process the audio file
+    const audioPath = req.file.path;
+    const title = req.body.title || 'Untitled Summary';
+    console.log('Processing audio:', audioPath, 'with title:', title);
+    
+    // Transcribe the audio
+    console.log('Starting transcription...');
+    const transcription = await transcribeAudio(audioPath);
+    console.log('Transcription completed');
+    
+    // Summarize the transcription
+    console.log('Starting summarization...');
+    const summary = await summarizeText(transcription);
+    console.log('Summarization completed');
+    
+    // Generate PDF (if your function supports it)
+    let pdfPath = '';
+    try {
+      console.log('Generating PDF...');
+      pdfPath = await generatePDF(title, summary);
+      console.log('PDF generated:', pdfPath);
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      // Continue without PDF if there's an error
+    }
+    
+    // Save the summary to the database
+    console.log('Saving summary to database...');
+    const newSummaryResult = await db.query(
+      'INSERT INTO summaries (user_id, title, content, audio_path, pdf_path) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [userId, title, summary, audioPath, pdfPath]
+    );
+    
+    const newSummary = newSummaryResult.rows[0];
+    console.log('Summary saved to database with ID:', newSummary.id);
+    
+    res.json({
+      success: true,
+      summary: newSummary
+    });
+  } catch (error) {
+    console.error('Process audio error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 });
 
@@ -541,154 +665,9 @@ app.get('/api/summaries', async (req, res) => {
   }
 });
 
-// Set up multer for file uploads
-const uploadDir = path.join(__dirname, 'uploads');
-if (!existsSync(uploadDir)) {
-  mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ storage: storage });
-
-// Add this near the top of your file, after the imports
-const logRequest = (req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  next();
-};
-
-// Add this middleware to log all requests
-app.use(logRequest);
-
-// Modify the process-audio endpoint to add more detailed error handling
-app.post('/api/process-audio', upload.single('audio'), async (req, res) => {
-  console.log('Process audio endpoint called');
-  try {
-    // Check if file was uploaded
-    if (!req.file) {
-      console.log('No file uploaded');
-      return res.status(400).json({ success: false, message: 'No file uploaded' });
-    }
-    
-    console.log('File uploaded:', req.file.path);
-    
-    // Get user ID from JWT token
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('Unauthorized - no valid auth header');
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
-    }
-    
-    const token = authHeader.split(' ')[1];
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-    } catch (error) {
-      console.log('JWT verification failed:', error.message);
-      return res.status(401).json({ success: false, message: 'Invalid token' });
-    }
-    
-    const userId = decoded.userId;
-    console.log('User ID from token:', userId);
-    
-    // Check if user exists
-    const userResult = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
-    
-    if (userResult.rows.length === 0) {
-      console.log('User not found:', userId);
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    const user = userResult.rows[0];
-    console.log('User found:', user.email);
-    
-    // Check usage limits
-    const summariesResult = await db.query('SELECT COUNT(*) FROM summaries WHERE user_id = $1', [userId]);
-    const summaryCount = parseInt(summariesResult.rows[0].count);
-    console.log('Summary count:', summaryCount);
-    
-    let usageLimit = 5; // Default for free tier
-    if (user.membership_type === 'premium') {
-      usageLimit = 100;
-    } else if (user.membership_type === 'unlimited') {
-      usageLimit = Infinity;
-    }
-    console.log('Usage limit:', usageLimit);
-    
-    if (summaryCount >= usageLimit) {
-      console.log('Usage limit reached');
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Usage limit reached. Please upgrade your membership to continue.' 
-      });
-    }
-    
-    // Process the audio file
-    const audioPath = req.file.path;
-    const title = req.body.title || 'Untitled Summary';
-    console.log('Processing audio:', audioPath, 'with title:', title);
-    
-    // Transcribe the audio
-    console.log('Starting transcription...');
-    const transcription = await transcribeAudio(audioPath);
-    console.log('Transcription completed');
-    
-    // Summarize the transcription
-    console.log('Starting summarization...');
-    const summary = await summarizeText(transcription);
-    console.log('Summarization completed');
-    
-    // Generate PDF (if your function supports it)
-    let pdfPath = '';
-    try {
-      console.log('Generating PDF...');
-      pdfPath = await generatePDF(title, summary);
-      console.log('PDF generated:', pdfPath);
-    } catch (error) {
-      console.error('PDF generation error:', error);
-      // Continue without PDF if there's an error
-    }
-    
-    // Save the summary to the database
-    console.log('Saving summary to database...');
-    const newSummaryResult = await db.query(
-      'INSERT INTO summaries (user_id, title, content, audio_path, pdf_path) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [userId, title, summary, audioPath, pdfPath]
-    );
-    
-    const newSummary = newSummaryResult.rows[0];
-    console.log('Summary saved to database with ID:', newSummary.id);
-    
-    res.json({
-      success: true,
-      summary: newSummary
-    });
-  } catch (error) {
-    console.error('Process audio error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
-  }
-});
-
-// Add a catch-all error handler for API routes
-app.use('/api', (err, req, res, next) => {
-  console.error('API error:', err);
-  res.status(500).json({
-    success: false,
-    message: 'Server error',
-    error: err.message
-  });
-});
-
-// Make sure this comes AFTER all your API routes but BEFORE the catch-all route
-app.get('/api/*', (req, res) => {
+// Move this BEFORE the catch-all route for the React app
+// Make sure all API routes are defined before this middleware
+app.use('/api', (req, res) => {
   console.log('API route not found:', req.path);
   res.status(404).json({ success: false, message: 'API endpoint not found' });
 });
