@@ -595,31 +595,85 @@ app.post('/api/google-login', async (req, res) => {
   }
 });
 
-// Add usage status endpoint
+// Add a proxy for localhost:5001 requests
+app.use((req, res, next) => {
+  const originalUrl = req.originalUrl;
+  
+  // Check if this is a request that's trying to access localhost:5001
+  if (req.headers.referer && req.headers.referer.includes('localhost:5001')) {
+    console.log('Detected localhost:5001 referer:', req.headers.referer);
+  }
+  
+  // If the request is for localhost:5001/api/*, redirect to /api/*
+  if (originalUrl.includes('localhost:5001/api/')) {
+    const newUrl = originalUrl.replace('localhost:5001/api/', '/api/');
+    console.log(`Redirecting ${originalUrl} to ${newUrl}`);
+    return res.redirect(newUrl);
+  }
+  
+  next();
+});
+
+// Add a specific handler for the usage-status endpoint
 app.get('/api/usage-status', async (req, res) => {
   try {
+    console.log('Usage status endpoint called');
+    
     // Get user ID from JWT token
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
+      console.log('No authorization header');
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Unauthorized',
+        membershipType: 'free',
+        summaryCount: 0,
+        usageLimit: 5,
+        remainingUsage: 5
+      });
     }
     
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    } catch (error) {
+      console.log('JWT verification failed:', error.message);
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid token',
+        membershipType: 'free',
+        summaryCount: 0,
+        usageLimit: 5,
+        remainingUsage: 5
+      });
+    }
+    
     const userId = decoded.userId;
+    console.log('User ID from token:', userId);
     
     // Get user's membership type
     const userResult = await db.query('SELECT membership_type FROM users WHERE id = $1', [userId]);
     
     if (userResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      console.log('User not found');
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found',
+        membershipType: 'free',
+        summaryCount: 0,
+        usageLimit: 5,
+        remainingUsage: 5
+      });
     }
     
     const membershipType = userResult.rows[0].membership_type;
+    console.log('Membership type:', membershipType);
     
     // Count user's summaries
     const summariesResult = await db.query('SELECT COUNT(*) FROM summaries WHERE user_id = $1', [userId]);
     const summaryCount = parseInt(summariesResult.rows[0].count);
+    console.log('Summary count:', summaryCount);
     
     // Define usage limits based on membership type
     let usageLimit = 5; // Default for free tier
@@ -628,6 +682,7 @@ app.get('/api/usage-status', async (req, res) => {
     } else if (membershipType === 'unlimited') {
       usageLimit = Infinity;
     }
+    console.log('Usage limit:', usageLimit);
     
     res.json({
       success: true,
@@ -638,7 +693,15 @@ app.get('/api/usage-status', async (req, res) => {
     });
   } catch (error) {
     console.error('Usage status error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error', 
+      error: error.message,
+      membershipType: 'free',
+      summaryCount: 0,
+      usageLimit: 5,
+      remainingUsage: 5
+    });
   }
 });
 
