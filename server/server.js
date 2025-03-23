@@ -140,44 +140,87 @@ app.use(express.static(distPath, {
   }
 }));
 
-// Setup membership column in users table
-async function setupMembershipColumn() {
-  console.log('Starting setupMembershipColumn function');
+// Setup database tables and columns
+async function setupDatabase() {
+  console.log('Starting database setup');
   try {
-    console.log('Attempting to check if membership_type column exists');
-    // Add a timeout to prevent hanging indefinitely
-    const checkColumnPromise = db.query(`
-      SELECT column_name 
-      FROM information_schema.columns 
-      WHERE table_name = 'users' AND column_name = 'membership_type'
+    // Check if the users table exists
+    const checkTableResult = await db.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = 'users'
     `);
     
-    // Create a timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Database query timed out')), 5000);
-    });
-    
-    // Race the promises
-    const checkColumnResult = await Promise.race([checkColumnPromise, timeoutPromise]);
-    
-    console.log('Column check completed');
-    
-    // If the column doesn't exist, add it
-    if (checkColumnResult.rows.length === 0) {
-      console.log('Adding membership_type column to users table');
+    // If the users table doesn't exist, create it
+    if (checkTableResult.rows.length === 0) {
+      console.log('Creating users table');
       await db.query(`
-        ALTER TABLE users 
-        ADD COLUMN membership_type VARCHAR(20) DEFAULT 'free' NOT NULL
+        CREATE TABLE users (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          password VARCHAR(255),
+          first_name VARCHAR(100),
+          last_name VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          google_id VARCHAR(255),
+          membership_type VARCHAR(20) DEFAULT 'free' NOT NULL
+        )
       `);
-      console.log('membership_type column added successfully');
+      console.log('Users table created successfully');
     } else {
-      console.log('membership_type column already exists');
+      console.log('Users table already exists');
+      
+      // Check if the membership_type column exists
+      const checkColumnResult = await db.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'users' AND column_name = 'membership_type'
+      `);
+      
+      // If the column doesn't exist, add it
+      if (checkColumnResult.rows.length === 0) {
+        console.log('Adding membership_type column to users table');
+        await db.query(`
+          ALTER TABLE users 
+          ADD COLUMN membership_type VARCHAR(20) DEFAULT 'free' NOT NULL
+        `);
+        console.log('membership_type column added successfully');
+      } else {
+        console.log('membership_type column already exists');
+      }
     }
+    
+    // Check if the summaries table exists
+    const checkSummariesTableResult = await db.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = 'summaries'
+    `);
+    
+    // If the summaries table doesn't exist, create it
+    if (checkSummariesTableResult.rows.length === 0) {
+      console.log('Creating summaries table');
+      await db.query(`
+        CREATE TABLE summaries (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id),
+          title VARCHAR(255),
+          content TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          audio_path VARCHAR(255),
+          pdf_path VARCHAR(255)
+        )
+      `);
+      console.log('Summaries table created successfully');
+    } else {
+      console.log('Summaries table already exists');
+    }
+    
+    console.log('Database setup completed successfully');
   } catch (error) {
-    console.error('Error setting up membership column:', error);
+    console.error('Error setting up database:', error);
     // Continue execution even if there's an error
   }
-  console.log('Completed setupMembershipColumn function');
 }
 
 // Add a test route
@@ -225,7 +268,7 @@ const server = app.listen(PORT, () => {
   
   // Then setup database after server is running
   console.log('Server started, now setting up database...');
-  setupMembershipColumn().catch(err => {
-    console.error('Failed to setup membership column, but server is still running:', err);
+  setupDatabase().catch(err => {
+    console.error('Failed to setup database, but server is still running:', err);
   });
 });
