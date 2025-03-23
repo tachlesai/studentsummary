@@ -687,6 +687,46 @@ app.get('/api/summaries', async (req, res) => {
   }
 });
 
+// Add a specific handler for the dashboard page
+app.get('/dashboard', (req, res) => {
+  const indexPath = path.join(distPath, 'index.html');
+  console.log('Serving dashboard page');
+  
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('index.html not found');
+  }
+});
+
+// Add a specific endpoint to check if the API is working from the dashboard
+app.get('/api/dashboard-check', (req, res) => {
+  console.log('Dashboard check endpoint called');
+  res.json({
+    success: true,
+    message: 'Dashboard API is working!',
+    baseUrl: BASE_URL,
+    env: process.env.NODE_ENV
+  });
+});
+
+// Add middleware to redirect localhost API requests to the correct domain in production
+app.use((req, res, next) => {
+  const referer = req.headers.referer;
+  
+  // Check if this is a request from a page that's trying to access localhost
+  if (referer && referer.includes('localhost') && !isDevelopment) {
+    console.log('Detected localhost referer in production:', referer);
+    
+    // If this is an API request, log it
+    if (req.path.startsWith('/api')) {
+      console.log('API request with localhost referer:', req.path);
+    }
+  }
+  
+  next();
+});
+
 // Move this BEFORE the catch-all route for the React app
 // Make sure all API routes are defined before this middleware
 app.use('/api', (req, res) => {
