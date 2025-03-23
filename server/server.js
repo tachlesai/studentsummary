@@ -149,13 +149,25 @@ const checkAndUpdateUsage = async (userEmail) => {
 
 // Setup membership column in users table
 async function setupMembershipColumn() {
+  console.log('Starting setupMembershipColumn function');
   try {
-    // Check if the membership_type column exists
-    const checkColumnResult = await db.query(`
+    console.log('Attempting to check if membership_type column exists');
+    // Add a timeout to prevent hanging indefinitely
+    const checkColumnPromise = db.query(`
       SELECT column_name 
       FROM information_schema.columns 
       WHERE table_name = 'users' AND column_name = 'membership_type'
     `);
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database query timed out')), 5000);
+    });
+    
+    // Race the promises
+    const checkColumnResult = await Promise.race([checkColumnPromise, timeoutPromise]);
+    
+    console.log('Column check completed');
     
     // If the column doesn't exist, add it
     if (checkColumnResult.rows.length === 0) {
@@ -172,6 +184,7 @@ async function setupMembershipColumn() {
     console.error('Error setting up membership column:', error);
     // Continue execution even if there's an error
   }
+  console.log('Completed setupMembershipColumn function');
 }
 
 // Simplified upgrade endpoint
@@ -831,10 +844,13 @@ if (fs.existsSync(distPath)) {
   console.log('Dist directory does not exist');
 }
 
-// Start the server
-app.listen(PORT, () => {
+// Start the server first
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   
-  // Setup membership column
-  setupMembershipColumn();
+  // Then setup database after server is running
+  console.log('Server started, now setting up database...');
+  setupMembershipColumn().catch(err => {
+    console.error('Failed to setup membership column, but server is still running:', err);
+  });
 });
