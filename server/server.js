@@ -797,16 +797,73 @@ app.use('/api', (req, res) => {
   res.status(404).json({ success: false, message: 'API endpoint not found' });
 });
 
-// For any other request, send the React app's index.html
-// This should be the LAST route
-app.get('*', (req, res) => {
-  const indexPath = path.join(distPath, 'index.html');
-  console.log('Fallback to index.html for path:', req.path);
+// Add a special endpoint to inject a fix for the localhost:5001 issue
+app.get('/api-fix.js', (req, res) => {
+  console.log('Serving API fix script');
   
-  if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
+  // Set the correct content type
+  res.setHeader('Content-Type', 'application/javascript');
+  
+  // Return a script that will intercept fetch requests to localhost:5001
+  res.send(`
+    console.log('API fix script loaded');
+    
+    // Store the original fetch function
+    const originalFetch = window.fetch;
+    
+    // Override the fetch function
+    window.fetch = function(url, options) {
+      // Check if the URL contains localhost:5001
+      if (typeof url === 'string' && url.includes('localhost:5001')) {
+        // Replace localhost:5001 with the current origin
+        const newUrl = url.replace('localhost:5001', window.location.origin);
+        console.log('Redirecting fetch from', url, 'to', newUrl);
+        return originalFetch(newUrl, options);
+      }
+      
+      // Otherwise, use the original fetch
+      return originalFetch(url, options);
+    };
+    
+    // Also fix any hardcoded API_BASE_URL
+    if (window.API_BASE_URL && window.API_BASE_URL.includes('localhost:5001')) {
+      console.log('Fixing API_BASE_URL from', window.API_BASE_URL);
+      window.API_BASE_URL = window.API_BASE_URL.replace('localhost:5001', window.location.origin);
+      console.log('API_BASE_URL fixed to', window.API_BASE_URL);
+    }
+  `);
+});
+
+// Modify the index.html to include our fix script
+app.use('*', (req, res, next) => {
+  // Skip for API requests and the fix script itself
+  if (req.path.startsWith('/api') || req.path === '/api-fix.js') {
+    return next();
+  }
+  
+  // For HTML requests, inject our script
+  if (req.path.endsWith('.html') || req.path === '/' || !req.path.includes('.')) {
+    const indexPath = path.join(distPath, 'index.html');
+    
+    if (fs.existsSync(indexPath)) {
+      // Read the index.html file
+      fs.readFile(indexPath, 'utf8', (err, data) => {
+        if (err) {
+          console.error('Error reading index.html:', err);
+          return next();
+        }
+        
+        // Inject our script before the closing </head> tag
+        const modifiedData = data.replace('</head>', '<script src="/api-fix.js"></script></head>');
+        
+        // Send the modified HTML
+        res.send(modifiedData);
+      });
+    } else {
+      next();
+    }
   } else {
-    res.status(404).send('index.html not found');
+    next();
   }
 });
 
