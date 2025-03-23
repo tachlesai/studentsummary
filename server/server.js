@@ -355,6 +355,55 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+// Add signup endpoint (alias for register)
+app.post('/api/signup', async (req, res) => {
+  try {
+    const { email, password, firstName, lastName } = req.body;
+    
+    // Check if user already exists
+    const existingUser = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ success: false, message: 'Email already in use' });
+    }
+    
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    
+    // Create new user
+    const newUserResult = await db.query(
+      'INSERT INTO users (email, password, first_name, last_name) VALUES ($1, $2, $3, $4) RETURNING *',
+      [email, hashedPassword, firstName, lastName]
+    );
+    
+    const newUser = newUserResult.rows[0];
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: newUser.id, email: newUser.email },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: '24h' }
+    );
+    
+    // Return user info and token
+    res.status(201).json({
+      success: true,
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        firstName: newUser.first_name,
+        lastName: newUser.last_name,
+        membershipType: newUser.membership_type
+      },
+      token
+    });
+  } catch (error) {
+    console.error('Signup error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
 // Add Google OAuth endpoint
 app.post('/api/google-login', async (req, res) => {
   try {
