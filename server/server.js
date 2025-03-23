@@ -465,6 +465,177 @@ app.post('/api/google-login', async (req, res) => {
   }
 });
 
+// Add usage status endpoint
+app.get('/api/usage-status', async (req, res) => {
+  try {
+    // Get user ID from JWT token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const userId = decoded.userId;
+    
+    // Get user's membership type
+    const userResult = await db.query('SELECT membership_type FROM users WHERE id = $1', [userId]);
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    const membershipType = userResult.rows[0].membership_type;
+    
+    // Count user's summaries
+    const summariesResult = await db.query('SELECT COUNT(*) FROM summaries WHERE user_id = $1', [userId]);
+    const summaryCount = parseInt(summariesResult.rows[0].count);
+    
+    // Define usage limits based on membership type
+    let usageLimit = 5; // Default for free tier
+    if (membershipType === 'premium') {
+      usageLimit = 100;
+    } else if (membershipType === 'unlimited') {
+      usageLimit = Infinity;
+    }
+    
+    res.json({
+      success: true,
+      membershipType,
+      summaryCount,
+      usageLimit,
+      remainingUsage: Math.max(0, usageLimit - summaryCount)
+    });
+  } catch (error) {
+    console.error('Usage status error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
+// Add summaries endpoint
+app.get('/api/summaries', async (req, res) => {
+  try {
+    // Get user ID from JWT token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const userId = decoded.userId;
+    
+    // Get user's summaries
+    const summariesResult = await db.query(
+      'SELECT * FROM summaries WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
+    );
+    
+    res.json({
+      success: true,
+      summaries: summariesResult.rows
+    });
+  } catch (error) {
+    console.error('Summaries error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
+// Set up multer for file uploads
+const uploadDir = path.join(__dirname, 'uploads');
+if (!existsSync(uploadDir)) {
+  mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ storage: storage });
+
+// Add process-audio endpoint
+app.post('/api/process-audio', upload.single('audio'), async (req, res) => {
+  try {
+    // Get user ID from JWT token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const userId = decoded.userId;
+    
+    // Check if user exists
+    const userResult = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    const user = userResult.rows[0];
+    
+    // Check usage limits
+    const summariesResult = await db.query('SELECT COUNT(*) FROM summaries WHERE user_id = $1', [userId]);
+    const summaryCount = parseInt(summariesResult.rows[0].count);
+    
+    let usageLimit = 5; // Default for free tier
+    if (user.membership_type === 'premium') {
+      usageLimit = 100;
+    } else if (user.membership_type === 'unlimited') {
+      usageLimit = Infinity;
+    }
+    
+    if (summaryCount >= usageLimit) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Usage limit reached. Please upgrade your membership to continue.' 
+      });
+    }
+    
+    // Process the audio file
+    const audioPath = req.file.path;
+    const title = req.body.title || 'Untitled Summary';
+    
+    // Transcribe the audio
+    const transcription = await transcribeAudio(audioPath);
+    
+    // Summarize the transcription
+    const summary = await summarizeText(transcription);
+    
+    // Generate PDF (if your function supports it)
+    let pdfPath = '';
+    try {
+      pdfPath = await generatePDF(title, summary);
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      // Continue without PDF if there's an error
+    }
+    
+    // Save the summary to the database
+    const newSummaryResult = await db.query(
+      'INSERT INTO summaries (user_id, title, content, audio_path, pdf_path) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [userId, title, summary, audioPath, pdfPath]
+    );
+    
+    const newSummary = newSummaryResult.rows[0];
+    
+    res.json({
+      success: true,
+      summary: newSummary
+    });
+  } catch (error) {
+    console.error('Process audio error:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+});
+
 console.log('About to start server...');
 
 // Start the server first
