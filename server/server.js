@@ -223,9 +223,15 @@ async function setupDatabase() {
   }
 }
 
-// Add a test route
+// Add a test endpoint
 app.get('/api/test', (req, res) => {
-  res.json({ message: 'Server is working!' });
+  console.log('Test endpoint called');
+  res.json({ 
+    success: true, 
+    message: 'API is working!',
+    baseUrl: BASE_URL,
+    env: process.env.NODE_ENV
+  });
 });
 
 // Log the structure of the dist directory
@@ -636,7 +642,7 @@ app.get('/api/usage-status', async (req, res) => {
   }
 });
 
-// Add summaries endpoint
+// Update the summaries endpoint to ensure it always returns an array
 app.get('/api/summaries', async (req, res) => {
   try {
     // Get user ID from JWT token
@@ -646,8 +652,16 @@ app.get('/api/summaries', async (req, res) => {
     }
     
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    } catch (error) {
+      console.log('JWT verification failed:', error.message);
+      return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+    
     const userId = decoded.userId;
+    console.log('Fetching summaries for user ID:', userId);
     
     // Get user's summaries
     const summariesResult = await db.query(
@@ -655,13 +669,21 @@ app.get('/api/summaries', async (req, res) => {
       [userId]
     );
     
+    console.log('Found summaries:', summariesResult.rows.length);
+    
+    // Always return an array, even if empty
     res.json({
       success: true,
-      summaries: summariesResult.rows
+      summaries: summariesResult.rows || []
     });
   } catch (error) {
     console.error('Summaries error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error', 
+      error: error.message,
+      summaries: [] // Always include an empty array on error
+    });
   }
 });
 
