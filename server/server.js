@@ -601,6 +601,31 @@ app.post('/api/google-login', async (req, res) => {
   }
 });
 
+// Add a special route to handle localhost:5001 requests
+app.get('/localhost:5001/api/usage-status', (req, res) => {
+  console.log('Intercepted localhost:5001 request for usage-status');
+  
+  // Return default values
+  res.json({
+    success: true,
+    membershipType: 'free',
+    summaryCount: 0,
+    usageLimit: 5,
+    remainingUsage: 5
+  });
+});
+
+// Add a special route to handle localhost:5001 requests for summaries
+app.get('/localhost:5001/api/summaries', (req, res) => {
+  console.log('Intercepted localhost:5001 request for summaries');
+  
+  // Return an empty array
+  res.json({
+    success: true,
+    summaries: []
+  });
+});
+
 // Add a proxy for localhost:5001 requests
 app.use((req, res, next) => {
   const originalUrl = req.originalUrl;
