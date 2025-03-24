@@ -819,6 +819,62 @@ app.use('*', (req, res, next) => {
   }
 });
 
+// Add a route to serve a modified version of the JavaScript bundle
+app.get('/assets/index-BbntgpZN.js', (req, res) => {
+  console.log('Serving modified JavaScript bundle');
+  
+  const jsPath = path.join(distPath, 'assets', 'index-BbntgpZN.js');
+  
+  if (fs.existsSync(jsPath)) {
+    // Read the JavaScript file
+    fs.readFile(jsPath, 'utf8', (err, data) => {
+      if (err) {
+        console.error('Error reading JavaScript bundle:', err);
+        return res.status(500).send('Error reading JavaScript bundle');
+      }
+      
+      // Replace all instances of localhost:5001 with an empty string (which makes it relative to the current origin)
+      const modifiedData = data.replace(/localhost:5001/g, '');
+      
+      // Set the correct content type
+      res.setHeader('Content-Type', 'application/javascript');
+      
+      // Send the modified JavaScript
+      res.send(modifiedData);
+    });
+  } else {
+    res.status(404).send('JavaScript bundle not found');
+  }
+});
+
+// Add a fallback route for any JavaScript bundle
+app.get('/assets/index-*.js', (req, res, next) => {
+  console.log('Serving modified JavaScript bundle for:', req.path);
+  
+  const jsPath = path.join(distPath, req.path);
+  
+  if (fs.existsSync(jsPath)) {
+    // Read the JavaScript file
+    fs.readFile(jsPath, 'utf8', (err, data) => {
+      if (err) {
+        console.error('Error reading JavaScript bundle:', err);
+        return next();
+      }
+      
+      // Replace all instances of localhost:5001 with an empty string (which makes it relative to the current origin)
+      const modifiedData = data.replace(/localhost:5001/g, '');
+      
+      // Set the correct content type
+      res.setHeader('Content-Type', 'application/javascript');
+      
+      // Send the modified JavaScript
+      res.send(modifiedData);
+    });
+  } else {
+    next();
+  }
+});
+
 console.log('About to start server...');
 
 // Start the server first
