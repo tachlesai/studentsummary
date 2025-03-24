@@ -705,13 +705,20 @@ app.get('/api/usage-status', async (req, res) => {
   }
 });
 
-// Update the summaries endpoint to ensure it always returns an array
+// Update the summaries endpoint to ensure it always returns a properly formatted response
 app.get('/api/summaries', async (req, res) => {
   try {
+    console.log('Summaries endpoint called');
+    
     // Get user ID from JWT token
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
+      console.log('No authorization header');
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Unauthorized',
+        summaries: [] // Always include an empty array
+      });
     }
     
     const token = authHeader.split(' ')[1];
@@ -720,7 +727,11 @@ app.get('/api/summaries', async (req, res) => {
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
     } catch (error) {
       console.log('JWT verification failed:', error.message);
-      return res.status(401).json({ success: false, message: 'Invalid token' });
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid token',
+        summaries: [] // Always include an empty array
+      });
     }
     
     const userId = decoded.userId;
@@ -734,10 +745,20 @@ app.get('/api/summaries', async (req, res) => {
     
     console.log('Found summaries:', summariesResult.rows.length);
     
+    // Format the summaries for the frontend
+    const formattedSummaries = summariesResult.rows.map(summary => ({
+      id: summary.id,
+      title: summary.title || 'Untitled Summary',
+      content: summary.content || '',
+      createdAt: summary.created_at,
+      audioPath: summary.audio_path || '',
+      pdfPath: summary.pdf_path || ''
+    }));
+    
     // Always return an array, even if empty
     res.json({
       success: true,
-      summaries: summariesResult.rows || []
+      summaries: formattedSummaries
     });
   } catch (error) {
     console.error('Summaries error:', error);
@@ -752,11 +773,20 @@ app.get('/api/summaries', async (req, res) => {
 
 // Add a specific handler for the dashboard page
 app.get('/dashboard', (req, res) => {
+  console.log('Dashboard page requested');
   const indexPath = path.join(distPath, 'index.html');
-  console.log('Serving dashboard page');
   
   if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
+    // Read the index.html file
+    fs.readFile(indexPath, 'utf8', (err, data) => {
+      if (err) {
+        console.error('Error reading index.html:', err);
+        return res.status(500).send('Error reading index.html');
+      }
+      
+      // Send the HTML
+      res.send(data);
+    });
   } else {
     res.status(404).send('index.html not found');
   }
