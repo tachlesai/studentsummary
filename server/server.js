@@ -659,15 +659,38 @@ app.get('/api/usage-status', async (req, res) => {
   });
 });
 
-// Update the summaries endpoint to return an empty array
+// Update the summaries endpoint to return a properly formatted response with logging
 app.get('/api/summaries', async (req, res) => {
-  console.log('Summaries endpoint called - returning empty array');
+  console.log('Summaries endpoint called');
   
-  // Return an empty array without checking the database
-  res.json({
+  // Create the response object
+  const responseData = {
     success: true,
-    summaries: []
-  });
+    summaries: [] // This must be an array, even if empty
+  };
+  
+  // Log the response data
+  console.log('Returning summaries response:', JSON.stringify(responseData));
+  
+  // Send the response
+  res.json(responseData);
+});
+
+// Add a special route to handle localhost:5001 requests for summaries with logging
+app.get('/localhost:5001/api/summaries', (req, res) => {
+  console.log('Intercepted localhost:5001 request for summaries');
+  
+  // Create the response object
+  const responseData = {
+    success: true,
+    summaries: [] // This must be an array, even if empty
+  };
+  
+  // Log the response data
+  console.log('Returning localhost:5001 summaries response:', JSON.stringify(responseData));
+  
+  // Send the response
+  res.json(responseData);
 });
 
 // Add a specific handler for the dashboard page
