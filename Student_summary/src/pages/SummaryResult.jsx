@@ -18,21 +18,45 @@ const SummaryResult = () => {
   const buttonRef = useRef(null);
 
   useEffect(() => {
-    const savedSummary = localStorage.getItem('lastProcessedSummary');
-    if (savedSummary) {
-      try {
-        const parsedData = JSON.parse(savedSummary);
-        setSummaryData(parsedData);
-      } catch (error) {
-        console.error('Error parsing saved summary:', error);
+    console.log('Location state in SummaryResult:', location.state);
+    
+    if (location.state) {
+      // Handle summary content
+      if (typeof location.state.summary === 'string') {
+        setSummaryData(prev => ({ ...prev, summary: location.state.summary }));
+      } else if (location.state.summary && typeof location.state.summary === 'object') {
+        setSummaryData(prev => ({ ...prev, summary: location.state.summary.content || '' }));
+      } else {
+        setSummaryData(prev => ({ ...prev, summary: '' }));
       }
-    } else if (location.state) {
-      setSummaryData(location.state);
-      localStorage.setItem('lastProcessedSummary', JSON.stringify(location.state));
+      
+      // Handle title
+      setSummaryData(prev => ({ ...prev, title: location.state.title || 'Untitled Summary' }));
+      
+      // Handle PDF path
+      setSummaryData(prev => ({ ...prev, pdfPath: location.state.pdfPath || '' }));
+      
+      // Handle created date
+      setSummaryData(prev => ({ ...prev, created_at: location.state.created_at || new Date().toISOString() }));
+    } else {
+      // If no state is provided, check localStorage
+      const savedSummary = localStorage.getItem('lastProcessedSummary');
+      if (savedSummary) {
+        try {
+          const parsedData = JSON.parse(savedSummary);
+          setSummaryData(parsedData);
+        } catch (error) {
+          console.error('Error parsing saved summary:', error);
+          navigate('/dashboard');
+        }
+      } else {
+        // If no data is available, redirect to dashboard
+        navigate('/dashboard');
+      }
     }
-  }, [location.state]);
+  }, [location, navigate]);
   
-  const { summary, pdfPath } = summaryData;
+  const { summary, pdfPath, title, created_at } = summaryData;
   
   // Add this debug log
   console.log("Final pdfPath being used:", pdfPath);

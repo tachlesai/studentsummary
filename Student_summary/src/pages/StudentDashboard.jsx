@@ -610,13 +610,17 @@ const StudentDashboard = () => {
               <Card 
                 key={summary.id} 
                 className="p-4 hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate('/summary-result', {
-                  state: {
-                    summary: summary.summary,
-                    pdfPath: summary.pdf_path,
-                    title: summary.title  // Add this
-                  }
-                })}
+                onClick={() => {
+                  console.log("Navigating to summary:", summary);
+                  navigate('/summary-result', {
+                    state: {
+                      summary: summary.content || summary.summary,
+                      pdfPath: summary.pdf_path,
+                      title: summary.title || 'Untitled Summary',
+                      created_at: summary.created_at
+                    }
+                  });
+                }}
               >
                 <div className="flex items-center space-x-3 space-x-reverse">
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
