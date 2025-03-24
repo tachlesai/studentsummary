@@ -1,6 +1,6 @@
 // src/config.js
-const isDevelopment = window.location.hostname === 'localhost' || 
-                     window.location.hostname === '127.0.0.1';
+// Use Vite's import.meta.env to determine the environment
+const isDevelopment = import.meta.env.DEV;
 
 // Set the appropriate base URL
 const API_BASE_URL = isDevelopment 
