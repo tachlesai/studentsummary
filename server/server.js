@@ -786,10 +786,89 @@ app.get('/api-fix.js', (req, res) => {
   `);
 });
 
-// Modify the index.html to include our fix script
+// Add a route to serve a service worker that will intercept all network requests
+app.get('/sw.js', (req, res) => {
+  console.log('Serving service worker');
+  
+  // Set the correct content type
+  res.setHeader('Content-Type', 'application/javascript');
+  
+  // Return a service worker that will intercept all network requests
+  res.send(`
+    console.log('Service worker loaded');
+    
+    // Cache name
+    const CACHE_NAME = 'api-fix-cache-v1';
+    
+    // Install event
+    self.addEventListener('install', event => {
+      console.log('Service worker installed');
+      self.skipWaiting();
+    });
+    
+    // Activate event
+    self.addEventListener('activate', event => {
+      console.log('Service worker activated');
+      return self.clients.claim();
+    });
+    
+    // Fetch event
+    self.addEventListener('fetch', event => {
+      const url = new URL(event.request.url);
+      
+      // Check if this is a request to localhost:5001
+      if (url.hostname === 'localhost' && url.port === '5001') {
+        console.log('Intercepting request to localhost:5001:', url.pathname);
+        
+        // Create a new URL with the current origin
+        const newUrl = new URL(url.pathname, self.location.origin);
+        console.log('Redirecting to:', newUrl.href);
+        
+        // Fetch from the new URL
+        event.respondWith(
+          fetch(newUrl, {
+            method: event.request.method,
+            headers: event.request.headers,
+            body: event.request.body,
+            mode: 'cors',
+            credentials: 'include'
+          })
+        );
+      }
+    });
+  `);
+});
+
+// Add a script to register the service worker
+app.get('/register-sw.js', (req, res) => {
+  console.log('Serving service worker registration script');
+  
+  // Set the correct content type
+  res.setHeader('Content-Type', 'application/javascript');
+  
+  // Return a script that will register the service worker
+  res.send(`
+    console.log('Service worker registration script loaded');
+    
+    // Register the service worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => {
+            console.log('Service worker registered:', registration);
+          })
+          .catch(error => {
+            console.error('Service worker registration failed:', error);
+          });
+      });
+    }
+  `);
+});
+
+// Modify the index.html to include our service worker registration script
 app.use('*', (req, res, next) => {
-  // Skip for API requests and the fix script itself
-  if (req.path.startsWith('/api') || req.path === '/api-fix.js') {
+  // Skip for API requests and the service worker scripts
+  if (req.path.startsWith('/api') || req.path === '/sw.js' || req.path === '/register-sw.js') {
     return next();
   }
   
@@ -806,7 +885,7 @@ app.use('*', (req, res, next) => {
         }
         
         // Inject our script before the closing </head> tag
-        const modifiedData = data.replace('</head>', '<script src="/api-fix.js"></script></head>');
+        const modifiedData = data.replace('</head>', '<script src="/register-sw.js"></script></head>');
         
         // Send the modified HTML
         res.send(modifiedData);
