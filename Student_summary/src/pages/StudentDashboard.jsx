@@ -101,74 +101,16 @@ const StudentDashboard = () => {
     }
   };
 
-  const handleDrag = (e) => {
+  const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
+    setDragActive(true);
   };
 
-  const handleUpgradeMembership = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/upgrade-membership`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        alert('Successfully upgraded to premium!');
-        fetchUsageStatus();
-      } else {
-        const data = await response.json();
-        alert(data.message || 'Error upgrading membership');
-      }
-    } catch (error) {
-      console.error('Error upgrading membership:', error);
-      alert('Error upgrading membership');
-    }
-  };
-
-  const handleFileSubmit = async (e) => {
+  const handleDragLeave = (e) => {
     e.preventDefault();
-    if (!file) return;
-    
-    setLoading(true);
-    
-    const formData = new FormData();
-    formData.append('audioFile', file);
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/process-audio`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-      
-      const data = await response.json();
-      
-      if (data.success && data.redirectUrl) {
-        // Redirect to the summary page
-        navigate(data.redirectUrl);
-      } else {
-        // Fallback - refresh summaries list
-        fetchSummaries();
-        setFile(null);
-        setLoading(false);
-      }
-    } catch (error) {
-      console.error('Error processing file:', error);
-      setLoading(false);
-    }
+    e.stopPropagation();
+    setDragActive(false);
   };
 
   const handleDrop = (e) => {
@@ -190,7 +132,6 @@ const StudentDashboard = () => {
       const token = localStorage.getItem('token');
       console.log("Sending file to server...");
       
-      // Use the relative URL path that will be handled by the service worker
       fetch(`${API_BASE_URL}/process-audio`, {
         method: 'POST',
         headers: {
@@ -208,14 +149,20 @@ const StudentDashboard = () => {
         
         if (data.success) {
           console.log("Success! Received data:", data);
+          setProcessedSummary(data.summary.content);
+          setProcessedPdfPath(data.summary.pdf_path);
+          setProcessingComplete(true);
           
-          // Navigate to the summary page using the exact same approach as for existing summaries
-          navigate('/summary-result', { 
-            state: { 
-              summary: data.summary,
-              pdfPath: data.pdfPath
-            }
-          });
+          // Save to localStorage for persistence
+          localStorage.setItem('lastProcessedSummary', JSON.stringify({
+            summary: data.summary.content,
+            pdfPath: data.summary.pdf_path,
+            title: data.summary.title || 'Untitled Summary',
+            created_at: data.summary.created_at || new Date().toISOString()
+          }));
+          
+          // Refresh summaries list
+          fetchSummaries();
         } else {
           console.log("Error in response:", data.error);
           // Fallback - refresh summaries list
@@ -264,14 +211,20 @@ const StudentDashboard = () => {
         
         if (data.success) {
           console.log("Success! Received data:", data);
+          setProcessedSummary(data.summary.content);
+          setProcessedPdfPath(data.summary.pdf_path);
+          setProcessingComplete(true);
           
-          // Navigate to the summary page using the exact same approach as for existing summaries
-          navigate('/summary-result', { 
-            state: { 
-              summary: data.summary,
-              pdfPath: data.pdfPath
-            }
-          });
+          // Save to localStorage for persistence
+          localStorage.setItem('lastProcessedSummary', JSON.stringify({
+            summary: data.summary.content,
+            pdfPath: data.summary.pdf_path,
+            title: data.summary.title || 'Untitled Summary',
+            created_at: data.summary.created_at || new Date().toISOString()
+          }));
+          
+          // Refresh summaries list
+          fetchSummaries();
         } else {
           console.log("Error in response:", data.error);
           // Fallback - refresh summaries list
@@ -288,19 +241,19 @@ const StudentDashboard = () => {
     }
   };
 
-  const handleYouTubeSubmit = async (e) => {
+  const handleYoutubeSubmit = async (e) => {
     e.preventDefault();
     
-    if (!youtubeUrl || !youtubeUrl.includes('youtube.com')) {
-      alert('Please enter a valid YouTube URL');
+    if (!youtubeUrl) {
+      alert('Please enter a YouTube URL');
       return;
     }
-
+    
     setLoading(true);
+    setProcessingComplete(false);
+    
     try {
       const token = localStorage.getItem('token');
-      console.log('Sending request...'); // Debug log
-      
       const response = await fetch(`${API_BASE_URL}/process-youtube`, {
         method: 'POST',
         headers: {
@@ -308,249 +261,214 @@ const StudentDashboard = () => {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ 
-          url: youtubeUrl.trim(),
+          youtubeUrl,
           outputType,
-          summaryOptions: outputType === 'summary' ? summaryOptions : undefined
+          options: summaryOptions
         })
       });
-
+      
       const data = await response.json();
-      console.log('Response status:', response.status); // Debug log
-      console.log('Response data:', data); // Debug log
-
-      if (response.status === 403 || data.status === 'USAGE_LIMIT_REACHED') {
-        alert('נגמרו לך השימושים השבועיים! 🚫\n\n' +
-              'שדרג לחשבון פרימיום כדי לקבל:\n' +
-              '• שימוש בלתי מוגבל\n' +
-              '• תכונות נוספות\n' +
-              '• תמיכה בפיתוח הכלי\n\n' +
-              'לחץ OK כדי לשדרג! 🌟');
-        navigate('/upgrade');
-        return;
+      setLoading(false);
+      
+      if (data.success) {
+        setProcessedSummary(data.summary.content);
+        setProcessedPdfPath(data.summary.pdf_path);
+        setProcessingComplete(true);
+        
+        // Save to localStorage for persistence
+        localStorage.setItem('lastProcessedSummary', JSON.stringify({
+          summary: data.summary.content,
+          pdfPath: data.summary.pdf_path,
+          title: data.summary.title || 'YouTube Summary',
+          created_at: data.summary.created_at || new Date().toISOString()
+        }));
+        
+        // Refresh summaries list
+        fetchSummaries();
+      } else {
+        alert(data.error || 'Error processing YouTube video');
       }
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Error processing video');
-      }
-
-      navigate('/summary-result', { 
-        state: { 
-          summary: data.summary,
-          pdfPath: data.pdfPath
-        }
-      });
     } catch (error) {
       console.error('Error:', error);
-      alert(error.message);
-    } finally {
       setLoading(false);
+      alert('Error processing YouTube video: ' + error.message);
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    if (file) {
-      // If there's a file, trigger the file upload
-      const event = { target: { files: [file] } };
-      handleFileChange(event);
-    } else if (youtubeUrl) {
-      // Handle YouTube URL submission
-      handleYouTubeSubmit(e);
-    }
+  const handleOptionChange = (e) => {
+    const { name, value } = e.target;
+    setSummaryOptions(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleOutputTypeChange = (e) => {
+    setOutputType(e.target.value);
   };
 
   const viewLatestSummary = () => {
-    // Get the latest summary from localStorage
     const savedSummary = localStorage.getItem('lastProcessedSummary');
     if (savedSummary) {
-      const summaryData = JSON.parse(savedSummary);
-      // Navigate to the summary page
-      window.location.href = '/summary-result';
+      try {
+        const parsedData = JSON.parse(savedSummary);
+        navigate('/summary-result', { 
+          state: { 
+            summary: parsedData.summary,
+            pdfPath: parsedData.pdfPath,
+            title: parsedData.title,
+            created_at: parsedData.created_at
+          }
+        });
+      } catch (error) {
+        console.error('Error parsing saved summary:', error);
+        alert('Error loading the latest summary');
+      }
     } else {
-      alert('No summary available');
+      alert('No recent summary found');
     }
   };
 
-  const viewSummary = (summary) => {
-    // Navigate to the summary page with the summary data
-    navigate('/summary-result', { 
-      state: { 
-        summary: summary.summary,
-        pdfPath: summary.pdfPath || summary.pdf_path // Handle both naming conventions
-      }
-    });
-  };
-
   return (
-    <div className="min-h-screen bg-white text-gray-800 rtl font-sans" dir="rtl">
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-bold">
-            {user ? `שלום, ${user.firstName}` : 'שלום, אורח'}
-          </h1>
-          <div className="flex items-center space-x-2 space-x-reverse bg-blue-50 px-4 py-2 rounded-full">
-            <span className="text-yellow-500">👑</span>
-            <span className="font-medium font-sans">
-              {usageData?.membershipType === 'premium' ? "חשבון Pro" : "חשבון חינמי"}
-            </span>
-          </div>
-        </div>
-
-        {/* Add Usage Status Component */}
+      
+      <div className="container mx-auto px-4 py-8">
+        <h2 className="text-2xl font-bold mb-6 font-sans">לוח בקרה</h2>
+        
+        {/* Usage Status */}
         <UsageStatus />
-
-        {/* Show upgrade button for free users */}
-        {usageData?.membershipType === 'free' && (
-          <div className="mb-4">
-            <button 
-              onClick={handleUpgradeMembership}
-              className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
-            >
-              Upgrade to Premium
-            </button>
-          </div>
-        )}
-
-        {/* Upload Area */}
-        <Card className={`border-2 border-dashed ${dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'} rounded-lg`}>
-          <CardContent className="p-12">
-            <div className="flex flex-col items-center text-center space-y-6">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <span className="text-2xl">⬆️</span>
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-medium font-sans">העלה קובץ או הדבק קישור</h3>
-                <p className="text-gray-500 font-sans">גרור לכאן קובץ או הדבק קישור ליוטיוב</p>
+        
+        {/* Upload Card */}
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div className="space-y-6">
+              <h3 className="text-lg font-medium font-sans">צור סיכום חדש</h3>
+              
+              <div className="flex flex-col md:flex-row gap-4 mb-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-sans">סוג פלט</label>
+                  <select
+                    value={outputType}
+                    onChange={handleOutputTypeChange}
+                    className="w-full p-2 border border-gray-300 rounded-md font-sans"
+                    dir="rtl"
+                  >
+                    <option value="summary">סיכום</option>
+                    <option value="transcript">תמלול בלבד</option>
+                  </select>
+                </div>
+                
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-sans">סגנון</label>
+                  <select
+                    name="style"
+                    value={summaryOptions.style}
+                    onChange={handleOptionChange}
+                    className="w-full p-2 border border-gray-300 rounded-md font-sans"
+                    dir="rtl"
+                  >
+                    <option value="concise">תמציתי</option>
+                    <option value="detailed">מפורט</option>
+                    <option value="academic">אקדמי</option>
+                  </select>
+                </div>
+                
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-sans">פורמט</label>
+                  <select
+                    name="format"
+                    value={summaryOptions.format}
+                    onChange={handleOptionChange}
+                    className="w-full p-2 border border-gray-300 rounded-md font-sans"
+                    dir="rtl"
+                  >
+                    <option value="bullets">נקודות</option>
+                    <option value="paragraphs">פסקאות</option>
+                  </select>
+                </div>
+                
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1 font-sans">שפה</label>
+                  <select
+                    name="language"
+                    value={summaryOptions.language}
+                    onChange={handleOptionChange}
+                    className="w-full p-2 border border-gray-300 rounded-md font-sans"
+                    dir="rtl"
+                  >
+                    <option value="he">עברית</option>
+                    <option value="en">אנגלית</option>
+                  </select>
+                </div>
               </div>
               
-              <form onSubmit={handleSubmit} className="flex flex-col items-center space-y-4 w-full max-w-md">
-                {isUsageLimitReached && (
-                  <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative" role="alert">
-                    <strong className="font-bold">שים לב! </strong>
-                    <span className="block sm:inline">נגמרו לך השימושים השבועיים. שדרג לפרימיום להמשך שימוש.</span>
-                  </div>
-                )}
-                {/* File Upload Section */}
-                <div className="w-full">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-sans">קישור ליוטיוב</label>
+                <form onSubmit={handleYoutubeSubmit} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    placeholder="הכנס קישור ליוטיוב"
+                    className="flex-1 p-2 border border-gray-300 rounded-md font-sans"
+                    dir="rtl"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading || !youtubeUrl || isUsageLimitReached}
+                    className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-sans 
+                      ${(loading || !youtubeUrl || isUsageLimitReached) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {loading ? 'מעבד...' : 'עבד'}
+                  </button>
+                </form>
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-sans">העלה קובץ אודיו/וידאו</label>
+                <div 
+                  className={`border-2 border-dashed rounded-lg p-6 text-center ${dragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <input
+                    type="file"
+                    id="file-upload"
+                    className="hidden"
+                    accept="audio/*,video/*"
+                    onChange={handleFileChange}
+                  />
                   <label 
                     htmlFor="file-upload" 
-                    className="cursor-pointer flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-sans"
+                    className="cursor-pointer flex flex-col items-center justify-center"
                   >
-                    <span>בחר קובץ אודיו או וידאו</span>
-                    <input
-                      id="file-upload"
-                      name="file-upload"
-                      type="file"
-                      className="sr-only"
-                      onChange={handleFileChange}
-                      accept="audio/*,video/*"
-                    />
+                    <svg className="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    <span className="text-gray-500 font-sans">גרור ושחרר קובץ כאן, או <span className="text-blue-500">לחץ לבחירת קובץ</span></span>
+                    <span className="text-xs text-gray-400 mt-1 font-sans">MP3, MP4, WAV, M4A (עד 500MB)</span>
                   </label>
-                  {file && (
-                    <div className="mt-2 text-sm text-gray-500 font-sans">
-                      {file.name}
-                    </div>
-                  )}
                 </div>
-                
-                <span className="text-gray-500 font-sans">- או -</span>
-                
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1 font-sans">מספר נקודות מקסימלי</label>
                 <input
-                  type="text" 
-                  value={youtubeUrl}
-                  onChange={(e) => setYoutubeUrl(e.target.value)}
-                  placeholder="הדבק קישור YouTube כאן..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-sans"
-                  required
+                  type="number"
+                  name="maxPoints"
+                  value={summaryOptions.maxPoints}
+                  onChange={handleOptionChange}
+                  min="1"
+                  max="20"
+                  className="w-full p-2 border border-gray-300 rounded-md font-sans"
+                  dir="rtl"
                 />
-
-                {/* Summary Options Section */}
-                <div className="w-full space-y-3 mt-6 border-t pt-6">
-                  <h3 className="text-lg font-medium mb-4">אפשרויות עיבוד</h3>
-                  
-                  <div className="flex gap-4 mb-4">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="outputType"
-                        value="summary"
-                        checked={outputType === 'summary'}
-                        onChange={(e) => setOutputType(e.target.value)}
-                        className="ml-2"
-                      />
-                      <span className="text-sm text-gray-600">סיכום</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="outputType"
-                        value="transcription"
-                        checked={outputType === 'transcription'}
-                        onChange={(e) => setOutputType(e.target.value)}
-                        className="ml-2"
-                      />
-                      <span className="text-sm text-gray-600">תמלול בלבד</span>
-                    </label>
-                  </div>
-
-                  {/* Show summary options only if summary is selected */}
-                  {outputType === 'summary' && (
-                    <>
-                      <h3 className="text-lg font-medium mb-4">אפשרויות סיכום</h3>
-                      
-                      <div className="flex flex-col">
-                        <label className="text-sm text-gray-600 mb-1">סגנון סיכום</label>
-                        <select 
-                          value={summaryOptions.style}
-                          onChange={(e) => setSummaryOptions({...summaryOptions, style: e.target.value})}
-                          className="px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                        >
-                          <option value="detailed">מפורט</option>
-                          <option value="concise">תמציתי</option>
-                        </select>
-                      </div>
-
-                      <div className="flex flex-col">
-                        <label className="text-sm text-gray-600 mb-1">פורמט</label>
-                        <select 
-                          value={summaryOptions.format}
-                          onChange={(e) => setSummaryOptions({...summaryOptions, format: e.target.value})}
-                          className="px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                        >
-                          <option value="bullets">נקודות</option>
-                          <option value="paragraphs">פסקאות</option>
-                        </select>
-                      </div>
-
-                      <div className="flex flex-col">
-                        <label className="text-sm text-gray-600 mb-1">שפה</label>
-                        <select 
-                          value={summaryOptions.language}
-                          onChange={(e) => setSummaryOptions({...summaryOptions, language: e.target.value})}
-                          className="px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                        >
-                          <option value="he">עברית</option>
-                          <option value="en">אנגלית</option>
-                        </select>
-                      </div>
-
-                      <div className="flex flex-col">
-                        <label className="text-sm text-gray-600 mb-1">מספר נקודות מקסימלי</label>
-                        <input 
-                          type="number"
-                          min="1"
-                          value={summaryOptions.maxPoints}
-                          onChange={(e) => setSummaryOptions({...summaryOptions, maxPoints: parseInt(e.target.value)})}
-                          className="px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <button 
+              </div>
+              
+              <form onSubmit={(e) => e.preventDefault()}>
+                <button
                   type="submit"
                   disabled={loading || (!youtubeUrl && !file) || isUsageLimitReached}
                   className={`px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full font-sans 
