@@ -861,6 +861,57 @@ app.get('/api-fix.js', (req, res) => {
       window.API_BASE_URL = window.API_BASE_URL.replace('localhost:5001', window.location.origin);
       console.log('API_BASE_URL fixed to', window.API_BASE_URL);
     }
+    
+    // Wait for the page to load
+    window.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM loaded, applying fixes');
+      
+      // Find and fix any hardcoded URLs in the page
+      setTimeout(function() {
+        // Fix any fetch calls in the dashboard component
+        if (window.location.pathname.includes('dashboard')) {
+          console.log('Applying dashboard-specific fixes');
+          
+          // Override any functions that might be using localhost:5001
+          if (window.fetchUsageStatus) {
+            const originalFetchUsageStatus = window.fetchUsageStatus;
+            window.fetchUsageStatus = function() {
+              console.log('Intercepted fetchUsageStatus call');
+              try {
+                const token = localStorage.getItem('token');
+                return fetch('/api/usage-status', {
+                  headers: {
+                    'Authorization': 'Bearer ' + token
+                  }
+                })
+                .then(response => response.json())
+                .then(data => {
+                  console.log('Usage status data:', data);
+                  return data;
+                });
+              } catch (error) {
+                console.error('Error in fetchUsageStatus:', error);
+                return Promise.reject(error);
+              }
+            };
+          }
+          
+          // Provide default data for components that expect it
+          window.defaultUsageStatus = {
+            success: true,
+            membershipType: 'free',
+            summaryCount: 0,
+            usageLimit: 5,
+            remainingUsage: 5
+          };
+          
+          window.defaultSummaries = {
+            success: true,
+            summaries: []
+          };
+        }
+      }, 500);
+    });
   `);
 });
 
