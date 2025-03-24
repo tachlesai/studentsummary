@@ -72,9 +72,17 @@ const StudentDashboard = () => {
         }
       });
       const data = await response.json();
-      setSummaries(data);
+      
+      // Check if data has the expected structure
+      if (data && data.success && Array.isArray(data.summaries)) {
+        setSummaries(data.summaries); // Use data.summaries instead of data
+      } else {
+        console.error('Unexpected API response format:', data);
+        setSummaries([]); // Set to empty array as fallback
+      }
     } catch (error) {
       console.error('Error fetching summaries:', error);
+      setSummaries([]); // Set to empty array on error
     }
   };
 

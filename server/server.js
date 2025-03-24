@@ -645,35 +645,143 @@ app.use((req, res, next) => {
   next();
 });
 
-// Add a specific handler for the usage-status endpoint that returns default values
-app.get('/api/usage-status', async (req, res) => {
-  console.log('Usage status endpoint called - returning default values');
-  
-  // Return default values without checking the database
-  res.json({
-    success: true,
-    membershipType: 'free',
-    summaryCount: 0,
-    usageLimit: 5,
-    remainingUsage: 5
-  });
-});
-
 // Update the summaries endpoint to return a properly formatted response with logging
 app.get('/api/summaries', async (req, res) => {
   console.log('Summaries endpoint called');
   
-  // Create the response object
-  const responseData = {
-    success: true,
-    summaries: [] // This must be an array, even if empty
-  };
+  try {
+    // Get the authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('No valid auth header');
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    // Extract and verify the token
+    const token = authHeader.split(' ')[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    } catch (error) {
+      console.log('JWT verification failed:', error.message);
+      return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+    
+    // Get the user ID from the token
+    const userId = decoded.userId;
+    console.log('User ID from token:', userId);
+    
+    // Query the database for summaries
+    const summariesResult = await db.query(
+      'SELECT * FROM summaries WHERE user_id = $1 ORDER BY created_at DESC',
+      [userId]
+    );
+    
+    // Always return an array, even if empty
+    const summaries = summariesResult.rows || [];
+    console.log(`Found ${summaries.length} summaries for user ${userId}`);
+    
+    // Log the response data
+    const responseData = {
+      success: true,
+      summaries: summaries
+    };
+    console.log('Returning summaries response:', JSON.stringify(responseData));
+    
+    // Send the response
+    res.json(responseData);
+  } catch (error) {
+    console.error('Error fetching summaries:', error);
+    // Always return an array for summaries, even on error
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error', 
+      error: error.message,
+      summaries: [] // Include an empty array to prevent client-side errors
+    });
+  }
+});
+
+// Update the usage-status endpoint to return properly formatted data
+app.get('/api/usage-status', async (req, res) => {
+  console.log('Usage status endpoint called');
   
-  // Log the response data
-  console.log('Returning summaries response:', JSON.stringify(responseData));
-  
-  // Send the response
-  res.json(responseData);
+  try {
+    // Get the authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('No valid auth header');
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    // Extract and verify the token
+    const token = authHeader.split(' ')[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    } catch (error) {
+      console.log('JWT verification failed:', error.message);
+      return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+    
+    // Get the user ID from the token
+    const userId = decoded.userId;
+    console.log('User ID from token:', userId);
+    
+    // Get user information
+    const userResult = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    
+    if (userResult.rows.length === 0) {
+      console.log('User not found:', userId);
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    const user = userResult.rows[0];
+    console.log('User found:', user.email);
+    
+    // Get summary count
+    const summariesResult = await db.query('SELECT COUNT(*) FROM summaries WHERE user_id = $1', [userId]);
+    const summaryCount = parseInt(summariesResult.rows[0].count);
+    console.log('Summary count:', summaryCount);
+    
+    // Determine usage limit based on membership type
+    let usageLimit = 5; // Default for free tier
+    if (user.membership_type === 'premium') {
+      usageLimit = 100;
+    } else if (user.membership_type === 'unlimited') {
+      usageLimit = Infinity;
+    }
+    
+    // Calculate remaining usage
+    const remainingUsage = Math.max(0, usageLimit - summaryCount);
+    
+    // Create the response object
+    const responseData = {
+      success: true,
+      membershipType: user.membership_type,
+      summaryCount: summaryCount,
+      usageLimit: usageLimit,
+      remainingUsage: remainingUsage
+    };
+    
+    // Log the response data
+    console.log('Returning usage status response:', JSON.stringify(responseData));
+    
+    // Send the response
+    res.json(responseData);
+  } catch (error) {
+    console.error('Error fetching usage status:', error);
+    // Return default values on error
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error', 
+      error: error.message,
+      membershipType: 'free',
+      summaryCount: 0,
+      usageLimit: 5,
+      remainingUsage: 5
+    });
+  }
 });
 
 // Add a special route to handle localhost:5001 requests for summaries with logging
