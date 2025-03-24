@@ -695,23 +695,104 @@ app.get('/localhost:5001/api/summaries', (req, res) => {
 
 // Add a specific handler for the dashboard page
 app.get('/dashboard', (req, res) => {
-  console.log('Dashboard page requested');
-  const indexPath = path.join(distPath, 'index.html');
+  console.log('Dashboard page requested - serving custom HTML');
   
-  if (fs.existsSync(indexPath)) {
-    // Read the index.html file
-    fs.readFile(indexPath, 'utf8', (err, data) => {
-      if (err) {
-        console.error('Error reading index.html:', err);
-        return res.status(500).send('Error reading index.html');
-      }
-      
-      // Send the HTML
-      res.send(data);
-    });
-  } else {
-    res.status(404).send('index.html not found');
-  }
+  // Send a simple HTML page that will work
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Dashboard - Student Summary</title>
+      <link rel="stylesheet" href="/assets/index-CEaGewsz.css">
+      <style>
+        .dashboard-container {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 20px;
+        }
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 20px;
+        }
+        .card {
+          background: white;
+          border-radius: 8px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          padding: 20px;
+          margin-bottom: 20px;
+        }
+        .button {
+          background: #4a90e2;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        .button:hover {
+          background: #3a80d2;
+        }
+        .summaries-list {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 20px;
+        }
+        .summary-card {
+          background: white;
+          border-radius: 8px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          padding: 20px;
+        }
+        .usage-info {
+          display: flex;
+          justify-content: space-between;
+          background: #f5f5f5;
+          padding: 15px;
+          border-radius: 8px;
+          margin-bottom: 20px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="dashboard-container">
+        <div class="header">
+          <h1>Dashboard</h1>
+          <a href="/" class="button">Home</a>
+        </div>
+        
+        <div class="card">
+          <h2>Usage Information</h2>
+          <div class="usage-info">
+            <div>
+              <strong>Membership Type:</strong> Free
+            </div>
+            <div>
+              <strong>Summaries Used:</strong> 0 / 5
+            </div>
+            <div>
+              <strong>Remaining:</strong> 5
+            </div>
+          </div>
+          <a href="/upload" class="button">Create New Summary</a>
+        </div>
+        
+        <div class="card">
+          <h2>Your Summaries</h2>
+          <div class="summaries-list">
+            <div class="summary-card">
+              <h3>No summaries yet</h3>
+              <p>Upload an audio file to create your first summary.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
 });
 
 // Add a specific endpoint to check if the API is working from the dashboard
