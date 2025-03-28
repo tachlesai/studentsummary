@@ -11,7 +11,7 @@ const Hero = () => {
                 🚀 הדור הבא של למידה
               </span>
               <h1 className="text-5xl font-bold mb-6 bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
-                תפסיק לבזבז שעות על למידה ותתחיל לחסוך זמן
+                הגיע הזמן להפסיק לבזבז שעות על למידה ולהתחיל לחסוך זמן
               </h1>
               <p className="text-gray-600 text-lg mb-8 leading-relaxed">
                 ב-2025 כולם כבר משתמשים בבינה מלאכותית, אבל 99% לא מנצלים את מלוא הפוטנציאל. 

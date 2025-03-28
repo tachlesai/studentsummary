@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
+
 const Navbar = () => {
   const [user, setUser] = useState(null);
 
@@ -28,7 +29,7 @@ const Navbar = () => {
               <Link to="/dashboard" className="text-gray-600 hover:text-indigo-600">סיכום סרטונים</Link>
               <Link to="#features" className="text-gray-600 hover:text-indigo-600">יכולות</Link>
               <Link to="#solutions" className="text-gray-600 hover:text-indigo-600">פתרונות</Link>
-              <Link to="#pricing" className="text-gray-600 hover:text-indigo-600">תמחור</Link>
+              <Link to="/PricingSection" className="text-gray-600 hover:text-indigo-600">תמחור</Link>
             </div>
           </div>
 

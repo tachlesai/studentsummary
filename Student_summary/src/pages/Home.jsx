@@ -8,6 +8,7 @@ import StudentStories from '../components/StudentStories';
 import Footer from '../components/Footer';
 import ThenVsToday from '../components/ThenVsToday';
 import FAQ from '../components/FAQ';
+import PricingSection from '../components/PricingSection';
 import '../styles/style.css';
 
 const Home = () => {
@@ -47,6 +48,9 @@ const Home = () => {
       </div>
       <div className="section">
         <StudentStories />
+      </div>
+      <div className="section">
+      <PricingSection />
       </div>
       <div className="section">
         <FAQ />

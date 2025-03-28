@@ -23,12 +23,6 @@ const Footer = () => {
           </div>
           
           <div>
-            <h3 className="font-bold mb-4">עקבו אחרינו</h3>
-            <div className="flex space-x-4">
-              <FiYoutube className="text-gray-600 hover:text-indigo-600" size={20} />
-              <FiTwitter className="text-gray-600 hover:text-indigo-600" size={20} />
-              <FiFacebook className="text-gray-600 hover:text-indigo-600" size={20} />
-            </div>
           </div>
         </div>
         <div className="mt-12 text-center text-gray-600">
