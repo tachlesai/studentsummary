@@ -8,6 +8,7 @@ import SignUp from './pages/SignUp';
 import SignupSuccess from './pages/SignupSuccess';
 import StudentDashboard from './pages/StudentDashboard';
 import SummaryResult from './pages/SummaryResult';
+import AudioRecordingPage from './pages/AudioRecordingPage';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
               <Route path="/signup-success" element={<SignupSuccess />} />
               <Route path="/dashboard" element={<StudentDashboard />} />
               <Route path="/summary-result" element={<SummaryResult />} />
+              <Route path="/record-audio" element={<AudioRecordingPage />} />
             </Routes>
           </div>
         </div>
