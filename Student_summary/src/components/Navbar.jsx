@@ -18,7 +18,8 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="absolute top-0 left-0 right-0 bg-white shadow-md h-16" dir="rtl">
+    // Changed from absolute to fixed positioning for sticky behavior
+    <nav className="fixed top-0 left-0 right-0 bg-white shadow-md h-16 z-50" dir="rtl">
       <div className="h-full mx-auto px-8">
         <div className="flex justify-between items-center h-full">
           {/* Right Side (Logo and Links) */}
@@ -26,6 +27,8 @@ const Navbar = () => {
             <Link to="/" className="text-[22px] font-bold text-indigo-600">TachelsAI</Link>
             <div className="flex gap-6">
               <Link to="/dashboard" className="text-gray-600 hover:text-indigo-600">סיכום סרטונים</Link>
+              {/* Added AudioRecorder link */}
+              <Link to="/record-audio" className="text-gray-600 hover:text-indigo-600">הקלטות</Link>
               <Link to="#features" className="text-gray-600 hover:text-indigo-600">יכולות</Link>
               <Link to="#solutions" className="text-gray-600 hover:text-indigo-600">פתרונות</Link>
               <Link to="#pricing" className="text-gray-600 hover:text-indigo-600">תמחור</Link>
