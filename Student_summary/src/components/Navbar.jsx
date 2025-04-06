@@ -27,11 +27,10 @@ const Navbar = () => {
             <Link to="/" className="text-[22px] font-bold text-indigo-600">TachelsAI</Link>
             <div className="flex gap-6">
               <Link to="/dashboard" className="text-gray-600 hover:text-indigo-600">סיכום סרטונים</Link>
-              {/* Added AudioRecorder link */}
               <Link to="/record-audio" className="text-gray-600 hover:text-indigo-600">הקלטות</Link>
-              <Link to="#features" className="text-gray-600 hover:text-indigo-600">יכולות</Link>
-              <Link to="#solutions" className="text-gray-600 hover:text-indigo-600">פתרונות</Link>
-              <Link to="#pricing" className="text-gray-600 hover:text-indigo-600">תמחור</Link>
+              <a href="/#capabilities" className="text-gray-600 hover:text-indigo-600">יכולות</a>
+              <a href="/#solutions" className="text-gray-600 hover:text-indigo-600">פתרונות</a>
+              <a href="/#pricing" className="text-gray-600 hover:text-indigo-600">תמחור</a>
             </div>
           </div>
 
