@@ -9,6 +9,7 @@ import StudentStories from '../components/StudentStories';
 import Footer from '../components/Footer';
 import ThenVsToday from '../components/ThenVsToday';
 import FAQ from '../components/FAQ';
+import Pricing from '../components/Pricing';
 import '../styles/style.css';
 
 const Home = () => {
@@ -35,6 +36,22 @@ const Home = () => {
         <Features />
       </div>
       
+      {/* Audio Recording Link Section */}
+      <div className="section">
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-md text-center">
+            <h3 className="text-xl font-semibold text-right mb-3">רוצה לנסות את הקלטת הקול שלנו?</h3>
+            <p className="text-right mb-4">עבור לדף ההקלטות כדי להתחיל להקליט ולקבל תמלול וסיכום</p>
+            <Link 
+              to="/record-audio" 
+              className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full transition-colors"
+            >
+              עבור לדף ההקלטות
+            </Link>
+          </div>
+        </div>
+      </div>
+      
       <div className="section">
         <Capabilities />
       </div>
@@ -49,6 +66,9 @@ const Home = () => {
       </div>
       <div className="section">
         <StudentStories />
+      </div>
+      <div className="section">
+        <Pricing />
       </div>
       <div className="section">
         <FAQ />

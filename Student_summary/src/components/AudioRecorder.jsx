@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
+import { motion } from 'framer-motion';
 
 const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
@@ -9,8 +10,40 @@ const AudioRecorder = () => {
   const [transcription, setTranscription] = useState('');
   const [summary, setSummary] = useState('');
   const [error, setError] = useState('');
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordingLevel, setRecordingLevel] = useState(0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const timerRef = useRef(null);
+  const analyserRef = useRef(null);
+  const dataArrayRef = useRef(null);
+  const animationFrameRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      clearInterval(timerRef.current);
+      cancelAnimationFrame(animationFrameRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
+
+  const updateAudioLevel = () => {
+    if (!analyserRef.current) return;
+    
+    analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+    const average = dataArrayRef.current.reduce((a, b) => a + b, 0) / dataArrayRef.current.length;
+    setRecordingLevel(average / 255); // Normalize to 0-1
+    
+    animationFrameRef.current = requestAnimationFrame(updateAudioLevel);
+  };
 
   const startRecording = async () => {
     try {
@@ -18,8 +51,27 @@ const AudioRecorder = () => {
       setTranscription('');
       setSummary('');
       setError('');
+      setRecordingTime(0);
       
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Set up audio analyzer for visualizing audio levels
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      analyserRef.current = analyser;
+      dataArrayRef.current = dataArray;
+      
+      // Start audio level visualization
+      updateAudioLevel();
+      
+      // Set up media recorder
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
 
@@ -34,10 +86,21 @@ const AudioRecorder = () => {
         const url = URL.createObjectURL(audioBlob);
         setAudioURL(url);
         setAudioBlob(audioBlob);
+        
+        // Clean up
+        clearInterval(timerRef.current);
+        cancelAnimationFrame(animationFrameRef.current);
       };
 
+      // Start recording
       mediaRecorderRef.current.start();
       setIsRecording(true);
+      
+      // Start timer
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
     } catch (error) {
       console.error('Error accessing microphone:', error);
       setError('Error accessing microphone. Please make sure you have granted permission.');
@@ -89,129 +152,178 @@ const AudioRecorder = () => {
   };
 
   return (
-    <div style={{ textAlign: 'center' }}>
-      <div style={{ marginBottom: '20px' }}>
-        {!isRecording ? (
-          <button 
-            onClick={startRecording}
-            style={{
-              backgroundColor: '#dc2626',
-              color: 'white',
-              padding: '12px 24px',
-              borderRadius: '50px',
-              border: 'none',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
+    <div className="max-w-4xl mx-auto p-6 bg-white rounded-xl shadow-lg">
+      <h2 className="text-2xl font-bold text-right mb-6 text-gray-800">הקלט את ההרצאה</h2>
+      
+      <div className="mb-8 bg-gray-50 p-6 rounded-lg">
+        <div className="flex flex-col items-center">
+          {/* Recording visualization */}
+          <div className="w-full h-24 mb-6 bg-gray-100 rounded-lg overflow-hidden relative">
+            {isRecording ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="flex space-x-1">
+                  {[...Array(20)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      className="w-1 bg-indigo-500"
+                      animate={{
+                        height: [
+                          Math.random() * 20 + 5,
+                          Math.random() * 40 + 20,
+                          Math.random() * 20 + 5
+                        ]
+                      }}
+                      transition={{
+                        duration: 0.5,
+                        repeat: Infinity,
+                        repeatType: "reverse",
+                        delay: i * 0.05
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                {audioURL ? "הקלטה הושלמה" : "לחץ על כפתור ההקלטה להתחלה"}
+              </div>
+            )}
+          </div>
+          
+          {/* Timer */}
+          {isRecording && (
+            <div className="mb-4 text-xl font-mono">
+              <span className="text-red-600">{formatTime(recordingTime)}</span>
+            </div>
+          )}
+          
+          {/* Record button */}
+          <motion.button
+            onClick={isRecording ? stopRecording : startRecording}
+            className={`relative w-16 h-16 rounded-full flex items-center justify-center shadow-lg ${
+              isRecording ? 'bg-gray-700' : 'bg-red-600 hover:bg-red-700'
+            } transition-colors duration-300`}
+            whileTap={{ scale: 0.95 }}
           >
-            <span style={{ 
-              display: 'inline-block', 
-              width: '12px', 
-              height: '12px', 
-              backgroundColor: 'white', 
-              borderRadius: '50%' 
-            }}></span>
-            התחל הקלטה
-          </button>
-        ) : (
-          <button 
-            onClick={stopRecording}
-            style={{
-              backgroundColor: '#4b5563',
-              color: 'white',
-              padding: '12px 24px',
-              borderRadius: '50px',
-              border: 'none',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            <span style={{ 
-              display: 'inline-block', 
-              width: '12px', 
-              height: '12px', 
-              backgroundColor: 'white',
-              borderRadius: '0'
-            }}></span>
-            הפסק הקלטה
-          </button>
-        )}
+            <motion.div
+              className={`absolute inset-0 rounded-full ${isRecording ? 'bg-red-600' : 'bg-transparent'}`}
+              animate={isRecording ? {
+                scale: [1, 1.2, 1],
+                opacity: [1, 0.7, 1]
+              } : {}}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+            />
+            <div className={`${isRecording ? 'w-4 h-4 bg-white rounded-sm' : 'w-6 h-6 bg-white rounded-full'}`}></div>
+          </motion.button>
+          
+          <p className="mt-3 text-gray-600 font-medium">
+            {isRecording ? 'לחץ להפסקת ההקלטה' : 'לחץ להתחלת הקלטה'}
+          </p>
+        </div>
       </div>
       
+      {/* Audio playback */}
       {audioURL && (
-        <div style={{ marginTop: '20px' }}>
-          <p style={{ marginBottom: '10px', textAlign: 'right' }}>ההקלטה שלך:</p>
-          <audio src={audioURL} controls style={{ width: '100%' }}></audio>
+        <motion.div 
+          className="mb-8 bg-gray-50 p-6 rounded-lg"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <h3 className="text-xl font-semibold text-right mb-4 text-gray-700">ההקלטה שלך</h3>
+          <audio 
+            src={audioURL} 
+            controls 
+            className="w-full h-12 rounded-md"
+          ></audio>
           
-          <button 
-            onClick={transcribeAudio}
-            disabled={isTranscribing}
-            style={{
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              padding: '10px 20px',
-              borderRadius: '50px',
-              border: 'none',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              cursor: isTranscribing ? 'not-allowed' : 'pointer',
-              marginTop: '15px',
-              opacity: isTranscribing ? 0.7 : 1
-            }}
-          >
-            {isTranscribing ? 'מתמלל...' : 'תמלל והכן סיכום'}
-          </button>
-        </div>
+          <div className="mt-6 flex justify-center">
+            <motion.button
+              onClick={transcribeAudio}
+              disabled={isTranscribing}
+              className={`
+                px-6 py-3 rounded-full font-bold text-white shadow-md
+                flex items-center space-x-2 rtl:space-x-reverse
+                ${isTranscribing ? 'bg-indigo-400' : 'bg-indigo-600 hover:bg-indigo-700'}
+                transition-colors duration-300
+              `}
+              whileHover={!isTranscribing ? { scale: 1.03 } : {}}
+              whileTap={!isTranscribing ? { scale: 0.97 } : {}}
+            >
+              {isTranscribing ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>מתמלל...</span>
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                  <span>תמלל והכן סיכום</span>
+                </>
+              )}
+            </motion.button>
+          </div>
+        </motion.div>
       )}
       
+      {/* Error message */}
       {error && (
-        <div style={{ 
-          marginTop: '20px', 
-          padding: '10px', 
-          backgroundColor: '#fee2e2', 
-          color: '#b91c1c',
-          borderRadius: '5px',
-          textAlign: 'right'
-        }}>
-          <p>{error}</p>
-        </div>
+        <motion.div 
+          className="mb-8 bg-red-50 p-4 rounded-lg border border-red-200"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="mr-3 text-right">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </motion.div>
       )}
       
+      {/* Transcription result */}
       {transcription && (
-        <div style={{ marginTop: '20px', textAlign: 'right' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '10px' }}>תמלול:</h3>
-          <div style={{ 
-            backgroundColor: '#f3f4f6', 
-            padding: '15px', 
-            borderRadius: '5px',
-            maxHeight: '200px',
-            overflowY: 'auto'
-          }}>
-            <p style={{ whiteSpace: 'pre-wrap' }}>{transcription}</p>
+        <motion.div 
+          className="mb-8 bg-gray-50 p-6 rounded-lg"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+        >
+          <h3 className="text-xl font-semibold text-right mb-4 text-gray-700">תמלול</h3>
+          <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200 max-h-60 overflow-y-auto">
+            <p className="text-gray-700 text-right whitespace-pre-wrap">{transcription}</p>
           </div>
-        </div>
+        </motion.div>
       )}
       
+      {/* Summary result */}
       {summary && (
-        <div style={{ marginTop: '20px', textAlign: 'right' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '10px' }}>סיכום:</h3>
-          <div style={{ 
-            backgroundColor: '#f0f9ff', 
-            padding: '15px', 
-            borderRadius: '5px',
-            border: '1px solid #bfdbfe'
-          }}>
-            <p style={{ whiteSpace: 'pre-wrap' }}>{summary}</p>
+        <motion.div 
+          className="mb-8 bg-blue-50 p-6 rounded-lg"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <h3 className="text-xl font-semibold text-right mb-4 text-blue-800">סיכום</h3>
+          <div className="bg-white p-4 rounded-md shadow-sm border border-blue-200">
+            <p className="text-gray-700 text-right whitespace-pre-wrap">{summary}</p>
           </div>
-        </div>
+        </motion.div>
       )}
     </div>
   );

@@ -36,7 +36,7 @@ const Capabilities = () => {
   ];
 
   return (
-    <section className="py-24 bg-white">
+    <section id="capabilities" className="py-24 bg-white">
       <div className="max-w-7xl mx-auto px-8">
         {/* Section Header */}
         <div className="text-center mb-16">
@@ -88,4 +88,4 @@ const Capabilities = () => {
   );
 };
 
-export default Capabilities; 
+export default Capabilities;
