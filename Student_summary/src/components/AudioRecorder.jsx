@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
@@ -18,6 +19,7 @@ const AudioRecorder = () => {
   const analyserRef = useRef(null);
   const dataArrayRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     return () => {
@@ -126,27 +128,83 @@ const AudioRecorder = () => {
     try {
       setIsTranscribing(true);
       
-      // Create a FormData object to send the audio file
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.wav');
+      // Log file size for debugging
+      console.log('Original audio size:', Math.round(audioBlob.size / 1024 / 1024), 'MB');
       
-      // Send the audio file to the server for transcription
-      const response = await axios.post('/api/transcribe', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
+      // Process audio without size restrictions
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      
+      reader.onloadend = async () => {
+        try {
+          setError('');
+          // Get token if available
+          const token = localStorage.getItem('token');
+
+          // Show processing message for large files
+          if (audioBlob.size > 1024 * 1024 * 10) { // If larger than 10MB
+            setError('הקלטה גדולה, העיבוד עשוי להימשך זמן רב... אנא המתן');
+          }
+          
+          // Use the direct endpoint with base64 data
+          const response = await axios.post('/api/process-recording', 
+            { audioData: reader.result },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : undefined
+              },
+              // Set a longer timeout for large files (5 minutes)
+              timeout: 300000
+            }
+          );
+          
+          if (response.data.success) {
+            setTranscription(response.data.transcription);
+            setSummary(response.data.summary);
+            setError(''); // Clear any processing messages
+            
+            // Format summary data to match file upload format
+            const summaryData = {
+              summary: typeof response.data.summary === 'object' 
+                ? response.data.summary.content 
+                : response.data.summary,
+              pdfPath: response.data.summary.pdf_path,
+              title: response.data.summary.title || 'Audio Recording',
+              created_at: response.data.summary.created_at || new Date().toISOString(),
+              file_name: response.data.summary.file_name || `recording_${Date.now()}.webm`
+            };
+            
+            // Save to localStorage for persistence, exactly like file upload
+            localStorage.setItem('lastProcessedSummary', JSON.stringify(summaryData));
+            
+            // Navigate to summary result page with same state structure as file upload
+            navigate('/summary-result', { state: summaryData });
+          } else {
+            setError(response.data.error || 'Failed to process audio');
+          }
+        } catch (error) {
+          console.error('Error processing audio:', error);
+          if (error.code === 'ECONNABORTED') {
+            setError('Request timed out. The recording might be too long. Try a shorter section.');
+          } else if (error.response && error.response.status === 413) {
+            setError('The recording is too large. Please try a shorter recording.');
+          } else {
+            setError('Error processing audio. Please try again later.');
+          }
+        } finally {
+          setIsTranscribing(false);
         }
-      });
+      };
       
-      if (response.data.success) {
-        setTranscription(response.data.transcription);
-        setSummary(response.data.summary);
-      } else {
-        setError(response.data.error || 'Failed to transcribe audio');
-      }
+      reader.onerror = () => {
+        console.error('Error reading audio file');
+        setError('Error preparing audio for upload');
+        setIsTranscribing(false);
+      };
     } catch (error) {
-      console.error('Error transcribing audio:', error);
-      setError('Error transcribing audio. Please try again later.');
-    } finally {
+      console.error('Error in transcription process:', error);
+      setError('Error processing recording');
       setIsTranscribing(false);
     }
   };

@@ -1,62 +1,22 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Card } from '../components/ui/card';
+import { Card, CardContent } from '../components/ui/card';
+import Navbar from '../components/Navbar';
+import API_BASE_URL from '../config';
+import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 
 const SummaryResult = () => {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Add these debug logs
-  console.log("Initial location state:", location.state);
-  console.log("PDF path from location:", location.state?.pdfPath);
-  
   const [summaryData, setSummaryData] = useState(location.state || {});
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isButtonEnabled, setIsButtonEnabled] = useState(true);
-
-  // Add a ref to get direct access to the button
-  const buttonRef = useRef(null);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
-    console.log("Component mounted");
-    
-    // Add the working console code directly in the component
-    setTimeout(() => {
-      const pdfButton = Array.from(document.querySelectorAll('button')).find(btn => 
-        btn.innerText.includes('הורד PDF')
-      );
-      
-      if (pdfButton) {
-        console.log('Found PDF button, enabling it');
-        pdfButton.disabled = false;
-        pdfButton.style.backgroundColor = '#2563eb';
-        pdfButton.style.cursor = 'pointer';
-        pdfButton.onclick = handleDownloadPDF;
-      }
-    }, 100);  // Small delay to ensure button is rendered
-
-    console.log('Location state in SummaryResult:', location.state);
-    
-    if (location.state) {
-      // Handle summary content
-      if (typeof location.state.summary === 'string') {
-        setSummaryData(prev => ({ ...prev, summary: location.state.summary }));
-      } else if (location.state.summary && typeof location.state.summary === 'object') {
-        setSummaryData(prev => ({ ...prev, summary: location.state.summary.content || '' }));
-      } else {
-        setSummaryData(prev => ({ ...prev, summary: '' }));
-      }
-      
-      // Handle title
-      setSummaryData(prev => ({ ...prev, title: location.state.title || 'Untitled Summary' }));
-      
-      // Handle PDF path
-      setSummaryData(prev => ({ ...prev, pdfPath: location.state.pdfPath || '' }));
-      
-      // Handle created date
-      setSummaryData(prev => ({ ...prev, created_at: location.state.created_at || new Date().toISOString() }));
-    } else {
-      // If no state is provided, check localStorage
+    // If no state is provided, try to get data from localStorage
+    if (!location.state) {
       const savedSummary = localStorage.getItem('lastProcessedSummary');
       if (savedSummary) {
         try {
@@ -75,80 +35,153 @@ const SummaryResult = () => {
   
   const { summary, pdfPath, title, created_at } = summaryData;
   
-  // Add this debug log
-  console.log("Final pdfPath being used:", pdfPath);
-
-  console.log('Summary state:', summaryData);
-  console.log('PDF path:', pdfPath);
-
   const handleBack = () => {
     navigate('/dashboard');
   };
 
-  const handleDownloadPDF = (e) => {
-    if (e) e.preventDefault();
-    
+  const handleDownloadPDF = async () => {
     try {
-      const savedSummary = localStorage.getItem('lastProcessedSummary');
-      console.log('Using saved summary:', savedSummary);
+      setIsDownloading(true);
       
-      if (!savedSummary) {
-        alert('No saved summary found in localStorage');
-        return;
-      }
-
-      const parsedData = JSON.parse(savedSummary);
-      const pdfPath = parsedData.pdfPath;
+      // Create a text file with a .pdf extension
+      const element = document.createElement('a');
+      // Use text/plain MIME type with .pdf extension
+      const file = new Blob([summary || 'No content available'], { 
+        type: 'text/plain' 
+      });
+      element.href = URL.createObjectURL(file);
+      element.download = `${title || 'summary'}_${Date.now()}.pdf`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
       
-      if (!pdfPath) {
-        alert('No PDF path found in saved data');
-        return;
-      }
-
-      const pathParts = pdfPath.split('/');
-      const filename = pathParts[pathParts.length - 1];
-      const downloadUrl = `/api/download-pdf/${encodeURIComponent(filename)}`;
-      console.log('Attempting to download from:', downloadUrl);
-      window.open(downloadUrl, '_blank');
+      setIsDownloading(false);
     } catch (error) {
-      console.error('Error downloading PDF:', error);
-      alert('Error downloading PDF');
+      console.error('Error downloading file:', error);
+      
+      // If download failed, show error
+      alert('שגיאה בהורדת הקובץ: ' + error.message);
+      setIsDownloading(false);
     }
+  };
+  
+  const handleCopyToClipboard = () => {
+    navigator.clipboard.writeText(summary || '')
+      .then(() => {
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+      })
+      .catch(err => {
+        console.error('Failed to copy text: ', err);
+        alert('שגיאה בהעתקת הטקסט');
+      });
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('he-IL', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
-    <div className="min-h-screen bg-white pt-20" dir="rtl">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">סיכום הסרטון</h1>
-            <div className="flex gap-4">
-              <button
-                onClick={handleBack}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
-              >
-                חזור
-              </button>
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+      
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="mb-6 flex justify-between items-center">
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            חזרה ללוח הבקרה
+          </button>
+        </div>
+        
+        <Card className="shadow-lg border border-gray-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 text-white">
+            <h1 className="text-2xl font-bold mb-2">{title || 'סיכום'}</h1>
+            <div className="flex items-center text-blue-100 text-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span>{formatDate(created_at)}</span>
+            </div>
+          </div>
+          
+          <CardContent className="p-0">
+            <div className="flex border-b border-gray-200">
               <button
                 onClick={handleDownloadPDF}
-                disabled={!isButtonEnabled}
-                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                disabled={isDownloading}
+                className={`flex-1 py-4 text-center font-medium ${isDownloading ? 'bg-gray-100 text-gray-400' : 'bg-white text-blue-600 hover:bg-blue-50'} transition-colors`}
               >
-                הורד PDF
+                {isDownloading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    מוריד...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    הורד PDF
+                  </span>
+                )}
+              </button>
+              
+              <button
+                onClick={handleCopyToClipboard}
+                className="flex-1 py-4 text-center font-medium bg-white text-blue-600 hover:bg-blue-50 transition-colors border-r border-gray-200"
+              >
+                {copySuccess ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    הועתק!
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    העתק לקליפבורד
+                  </span>
+                )}
               </button>
             </div>
-          </div>
-
-          <div className="prose max-w-none">
-            <div className="bg-gray-50 p-6 rounded-lg">
-              {summary ? (
-                <p className="whitespace-pre-wrap text-gray-700">{summary}</p>
-              ) : (
-                <p className="text-gray-500">לא נמצא סיכום</p>
-              )}
+            
+            <div className="p-6 bg-white rounded-b-lg">
+              <div className="border border-gray-100 bg-gray-50 p-6 rounded-lg shadow-inner">
+                {summary ? (
+                  <p className="whitespace-pre-wrap text-gray-700 leading-relaxed">{summary}</p>
+                ) : (
+                  <div className="text-center py-10">
+                    <div className="animate-pulse flex flex-col items-center justify-center">
+                      <div className="rounded-full bg-gray-200 h-12 w-12 mb-4"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-2.5"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
+        
       </div>
     </div>
   );

@@ -1,0 +1,310 @@
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Card, CardContent } from '../components/ui/card';
+import Navbar from '../components/Navbar';
+import API_BASE_URL from '../config';
+import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+
+const SummaryResult = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const [summaryData, setSummaryData] = useState(location.state || {});
+  const [loading, setLoading] = useState(!location.state);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    async function fetchSummaryData() {
+      try {
+        // If we have location state, use it
+        if (location.state) {
+          setSummaryData(location.state);
+          return;
+        }
+
+        // Try localStorage first
+        const savedSummary = localStorage.getItem('lastProcessedSummary');
+        if (savedSummary) {
+          try {
+            const parsedData = JSON.parse(savedSummary);
+            setSummaryData(parsedData);
+            return;
+          } catch (error) {
+            console.error('Error parsing saved summary:', error);
+          }
+        }
+
+        // If we have a summary ID in the URL, fetch it from the server
+        const summaryId = new URLSearchParams(location.search).get('id');
+        if (summaryId) {
+          const token = localStorage.getItem('token');
+          const response = await fetch(`${API_BASE_URL}/api/summaries/${summaryId}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch summary');
+          }
+          
+          const data = await response.json();
+          if (data.success) {
+            setSummaryData({
+              summary: data.summary.content,
+              pdfPath: data.summary.pdf_path,
+              title: data.summary.title,
+              created_at: data.summary.created_at
+            });
+          } else {
+            throw new Error(data.error || 'Failed to fetch summary');
+          }
+        } else {
+          // If we have no way to get the data, redirect to dashboard
+          navigate('/dashboard');
+        }
+      } catch (error) {
+        console.error('Error fetching summary:', error);
+        setError(error.message);
+        // Don't redirect immediately on error, show error message instead
+      }
+    }
+
+    setLoading(true);
+    fetchSummaryData().finally(() => setLoading(false));
+  }, [location, navigate]);
+  
+  const { summary, pdfPath, title, created_at } = summaryData;
+  
+  const handleBack = () => {
+    navigate('/dashboard');
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      setIsDownloading(true);
+
+      // Create a new PDF document
+      const pdfDoc = await PDFDocument.create();
+      pdfDoc.registerFontkit(fontkit);
+      
+      // Add a page to the document
+      const page = pdfDoc.addPage([595.28, 841.89]); // A4 size
+      
+      // Add content to the page
+      const { width, height } = page.getSize();
+      
+      // Add title
+      page.drawText(title || 'סיכום', {
+        x: width - 50,
+        y: height - 50,
+        size: 20,
+        color: rgb(0, 0, 0)
+      });
+      
+      // Add date
+      const dateStr = formatDate(created_at);
+      page.drawText(dateStr, {
+        x: width - 50,
+        y: height - 80,
+        size: 12,
+        color: rgb(0.4, 0.4, 0.4)
+      });
+      
+      // Add summary content with proper text wrapping
+      const contentLines = summary.split('\n');
+      let yPosition = height - 120;
+      
+      for (const line of contentLines) {
+        if (yPosition < 50) { // If we're near the bottom, add a new page
+          const newPage = pdfDoc.addPage([595.28, 841.89]);
+          yPosition = height - 50;
+        }
+        
+        page.drawText(line, {
+          x: width - 50,
+          y: yPosition,
+          size: 12,
+          color: rgb(0, 0, 0),
+          maxWidth: width - 100
+        });
+        
+        yPosition -= 20; // Move down for next line
+      }
+      
+      // Save the PDF
+      const pdfBytes = await pdfDoc.save();
+      
+      // Create a blob and download
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const element = document.createElement('a');
+      element.href = url;
+      element.download = `${title || 'summary'}_${Date.now()}.pdf`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('Error creating PDF:', error);
+      alert('שגיאה ביצירת ה-PDF: ' + error.message);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+  
+  const handleCopyToClipboard = () => {
+    navigator.clipboard.writeText(summary || '')
+      .then(() => {
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+      })
+      .catch(err => {
+        console.error('Failed to copy text: ', err);
+        alert('שגיאה בהעתקת הטקסט');
+      });
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('he-IL', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="max-w-5xl mx-auto px-4 py-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+            <h2 className="text-red-600 text-xl font-bold mb-4">שגיאה בטעינת הסיכום</h2>
+            <p className="text-red-500 mb-4">{error}</p>
+            <button
+              onClick={handleBack}
+              className="bg-red-100 text-red-600 px-6 py-2 rounded-lg hover:bg-red-200 transition-colors"
+            >
+              חזרה ללוח הבקרה
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+      
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="mb-6 flex justify-between items-center">
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            חזרה ללוח הבקרה
+          </button>
+        </div>
+        
+        <Card className="shadow-lg border border-gray-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 text-white">
+            <h1 className="text-2xl font-bold mb-2">{title || 'סיכום'}</h1>
+            <div className="flex items-center text-blue-100 text-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span>{formatDate(created_at)}</span>
+            </div>
+          </div>
+          
+          <CardContent className="p-0">
+            <div className="flex border-b border-gray-200">
+              <button
+                onClick={handleDownloadPDF}
+                disabled={isDownloading || loading}
+                className={`flex-1 py-4 text-center font-medium ${
+                  isDownloading || loading ? 'bg-gray-100 text-gray-400' : 'bg-white text-blue-600 hover:bg-blue-50'
+                } transition-colors`}
+              >
+                {isDownloading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="animate-spin h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    מוריד...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    הורד PDF
+                  </span>
+                )}
+              </button>
+              
+              <button
+                onClick={handleCopyToClipboard}
+                disabled={loading}
+                className={`flex-1 py-4 text-center font-medium ${
+                  loading ? 'bg-gray-100 text-gray-400' : 'bg-white text-blue-600 hover:bg-blue-50'
+                } transition-colors border-r border-gray-200`}
+              >
+                {copySuccess ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    הועתק!
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    העתק לקליפבורד
+                  </span>
+                )}
+              </button>
+            </div>
+            
+            <div className="p-6 bg-white rounded-b-lg">
+              <div className="border border-gray-100 bg-gray-50 p-6 rounded-lg shadow-inner">
+                {loading ? (
+                  <div className="text-center py-10">
+                    <div className="animate-pulse flex flex-col items-center justify-center">
+                      <div className="rounded-full bg-gray-200 h-12 w-12 mb-4"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-2.5"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                    </div>
+                  </div>
+                ) : summary ? (
+                  <p className="whitespace-pre-wrap text-gray-700 leading-relaxed">{summary}</p>
+                ) : (
+                  <div className="text-center text-gray-500">
+                    לא נמצא תוכן לסיכום זה
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default SummaryResult; 
