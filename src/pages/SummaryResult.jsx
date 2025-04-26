@@ -11,26 +11,70 @@ const SummaryResult = () => {
   const navigate = useNavigate();
   
   const [summaryData, setSummaryData] = useState(location.state || {});
+  const [loading, setLoading] = useState(!location.state);
   const [isDownloading, setIsDownloading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // If no state is provided, try to get data from localStorage
-    if (!location.state) {
-      const savedSummary = localStorage.getItem('lastProcessedSummary');
-      if (savedSummary) {
-        try {
-          const parsedData = JSON.parse(savedSummary);
-          setSummaryData(parsedData);
-        } catch (error) {
-          console.error('Error parsing saved summary:', error);
+    async function fetchSummaryData() {
+      try {
+        // If we have location state, use it
+        if (location.state) {
+          setSummaryData(location.state);
+          return;
+        }
+
+        // Try localStorage first
+        const savedSummary = localStorage.getItem('lastProcessedSummary');
+        if (savedSummary) {
+          try {
+            const parsedData = JSON.parse(savedSummary);
+            setSummaryData(parsedData);
+            return;
+          } catch (error) {
+            console.error('Error parsing saved summary:', error);
+          }
+        }
+
+        // If we have a summary ID in the URL, fetch it from the server
+        const summaryId = new URLSearchParams(location.search).get('id');
+        if (summaryId) {
+          const token = localStorage.getItem('token');
+          const response = await fetch(`${API_BASE_URL}/api/summaries/${summaryId}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch summary');
+          }
+          
+          const data = await response.json();
+          if (data.success) {
+            setSummaryData({
+              summary: data.summary.content,
+              pdfPath: data.summary.pdf_path,
+              title: data.summary.title,
+              created_at: data.summary.created_at
+            });
+          } else {
+            throw new Error(data.error || 'Failed to fetch summary');
+          }
+        } else {
+          // If we have no way to get the data, redirect to dashboard
           navigate('/dashboard');
         }
-      } else {
-        // If no data is available, redirect to dashboard
-        navigate('/dashboard');
+      } catch (error) {
+        console.error('Error fetching summary:', error);
+        setError(error.message);
+        // Don't redirect immediately on error, show error message instead
       }
     }
+
+    setLoading(true);
+    fetchSummaryData().finally(() => setLoading(false));
   }, [location, navigate]);
   
   const { summary, pdfPath, title, created_at } = summaryData;
@@ -42,25 +86,73 @@ const SummaryResult = () => {
   const handleDownloadPDF = async () => {
     try {
       setIsDownloading(true);
+
+      // Create a new PDF document
+      const pdfDoc = await PDFDocument.create();
+      pdfDoc.registerFontkit(fontkit);
       
-      // Create a text file with a .pdf extension
-      const element = document.createElement('a');
-      // Use text/plain MIME type with .pdf extension
-      const file = new Blob([summary || 'No content available'], { 
-        type: 'text/plain' 
+      // Add a page to the document
+      const page = pdfDoc.addPage([595.28, 841.89]); // A4 size
+      
+      // Add content to the page
+      const { width, height } = page.getSize();
+      
+      // Add title
+      page.drawText(title || 'סיכום', {
+        x: width - 50,
+        y: height - 50,
+        size: 20,
+        color: rgb(0, 0, 0)
       });
-      element.href = URL.createObjectURL(file);
+      
+      // Add date
+      const dateStr = formatDate(created_at);
+      page.drawText(dateStr, {
+        x: width - 50,
+        y: height - 80,
+        size: 12,
+        color: rgb(0.4, 0.4, 0.4)
+      });
+      
+      // Add summary content with proper text wrapping
+      const contentLines = summary.split('\n');
+      let yPosition = height - 120;
+      
+      for (const line of contentLines) {
+        if (yPosition < 50) { // If we're near the bottom, add a new page
+          const newPage = pdfDoc.addPage([595.28, 841.89]);
+          yPosition = height - 50;
+        }
+        
+        page.drawText(line, {
+          x: width - 50,
+          y: yPosition,
+          size: 12,
+          color: rgb(0, 0, 0),
+          maxWidth: width - 100
+        });
+        
+        yPosition -= 20; // Move down for next line
+      }
+      
+      // Save the PDF
+      const pdfBytes = await pdfDoc.save();
+      
+      // Create a blob and download
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const element = document.createElement('a');
+      element.href = url;
       element.download = `${title || 'summary'}_${Date.now()}.pdf`;
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
+      URL.revokeObjectURL(url);
       
-      setIsDownloading(false);
     } catch (error) {
-      console.error('Error downloading file:', error);
-      
-      // If download failed, show error
-      alert('שגיאה בהורדת הקובץ: ' + error.message);
+      console.error('Error creating PDF:', error);
+      alert('שגיאה ביצירת ה-PDF: ' + error.message);
+    } finally {
       setIsDownloading(false);
     }
   };
@@ -88,6 +180,26 @@ const SummaryResult = () => {
       minute: '2-digit'
     });
   };
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="max-w-5xl mx-auto px-4 py-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+            <h2 className="text-red-600 text-xl font-bold mb-4">שגיאה בטעינת הסיכום</h2>
+            <p className="text-red-500 mb-4">{error}</p>
+            <button
+              onClick={handleBack}
+              className="bg-red-100 text-red-600 px-6 py-2 rounded-lg hover:bg-red-200 transition-colors"
+            >
+              חזרה ללוח הבקרה
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -121,8 +233,10 @@ const SummaryResult = () => {
             <div className="flex border-b border-gray-200">
               <button
                 onClick={handleDownloadPDF}
-                disabled={isDownloading}
-                className={`flex-1 py-4 text-center font-medium ${isDownloading ? 'bg-gray-100 text-gray-400' : 'bg-white text-blue-600 hover:bg-blue-50'} transition-colors`}
+                disabled={isDownloading || loading}
+                className={`flex-1 py-4 text-center font-medium ${
+                  isDownloading || loading ? 'bg-gray-100 text-gray-400' : 'bg-white text-blue-600 hover:bg-blue-50'
+                } transition-colors`}
               >
                 {isDownloading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -144,7 +258,10 @@ const SummaryResult = () => {
               
               <button
                 onClick={handleCopyToClipboard}
-                className="flex-1 py-4 text-center font-medium bg-white text-blue-600 hover:bg-blue-50 transition-colors border-r border-gray-200"
+                disabled={loading}
+                className={`flex-1 py-4 text-center font-medium ${
+                  loading ? 'bg-gray-100 text-gray-400' : 'bg-white text-blue-600 hover:bg-blue-50'
+                } transition-colors border-r border-gray-200`}
               >
                 {copySuccess ? (
                   <span className="flex items-center justify-center gap-2">
@@ -166,9 +283,7 @@ const SummaryResult = () => {
             
             <div className="p-6 bg-white rounded-b-lg">
               <div className="border border-gray-100 bg-gray-50 p-6 rounded-lg shadow-inner">
-                {summary ? (
-                  <p className="whitespace-pre-wrap text-gray-700 leading-relaxed">{summary}</p>
-                ) : (
+                {loading ? (
                   <div className="text-center py-10">
                     <div className="animate-pulse flex flex-col items-center justify-center">
                       <div className="rounded-full bg-gray-200 h-12 w-12 mb-4"></div>
@@ -176,12 +291,17 @@ const SummaryResult = () => {
                       <div className="h-4 bg-gray-200 rounded w-1/3"></div>
                     </div>
                   </div>
+                ) : summary ? (
+                  <p className="whitespace-pre-wrap text-gray-700 leading-relaxed">{summary}</p>
+                ) : (
+                  <div className="text-center text-gray-500">
+                    לא נמצא תוכן לסיכום זה
+                  </div>
                 )}
               </div>
             </div>
           </CardContent>
         </Card>
-        
       </div>
     </div>
   );

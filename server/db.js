@@ -1,14 +1,41 @@
 import pg from 'pg';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
+
 const { Pool } = pg;
 
-// Database configuration
-const dbConfig = {
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/studentsummary',
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-};
+let dbConfig;
 
+// First try to use DATABASE_URL if it exists (common in production deployments)
+if (process.env.DATABASE_URL) {
+  console.log('Using DATABASE_URL for connection');
+  dbConfig = {
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  };
+} else {
+  // Otherwise use individual environment variables
+  console.log('Using individual DB variables for connection');
+  dbConfig = {
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || 'postgres',
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 5432,
+    database: process.env.DB_NAME || 'studentsummary',
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  };
+}
+
+// Log configuration (without password for security)
 console.log('Database config:', {
-  connectionString: dbConfig.connectionString ? 'Set' : 'Not set',
+  ...(dbConfig.connectionString ? { connectionString: 'Set' } : {
+    user: dbConfig.user,
+    host: dbConfig.host,
+    database: dbConfig.database,
+    port: dbConfig.port,
+  }),
   ssl: dbConfig.ssl
 });
 

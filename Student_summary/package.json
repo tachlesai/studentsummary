@@ -21,6 +21,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "fontkit": "^2.0.4",
+    "framer-motion": "^12.7.5",
     "fs": "^0.0.1-security",
     "lucide-react": "^0.471.2",
     "openai": "^4.77.0",

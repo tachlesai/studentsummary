@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import API_BASE_URL from '../config';
@@ -9,6 +9,27 @@ function Login() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Clear any previous user data when loading login page
+  useEffect(() => {
+    // Check localStorage token format to detect old token
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+    
+    if (token && user) {
+      try {
+        const userData = JSON.parse(user);
+        // If user has name but no first_name, it's the old format
+        if (userData.name && !userData.first_name) {
+          console.log('Clearing old user data format');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        }
+      } catch (err) {
+        console.error('Error checking user data:', err);
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -160,8 +181,9 @@ function Login() {
               </label>
               <input
                 type="email"
+                name="email"
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                onChange={handleChange}
                 required
                 style={{
                   width: '100%',
@@ -187,8 +209,9 @@ function Login() {
               </label>
               <input
                 type="password"
+                name="password"
                 value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                onChange={handleChange}
                 required
                 style={{
                   width: '100%',

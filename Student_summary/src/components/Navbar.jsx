@@ -1,13 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import API_BASE_URL from '../config';
 
 const Navbar = () => {
   const [user, setUser] = useState(null);
+  const [userName, setUserName] = useState('');
+
+  // Fetch first_name directly from server
+  const fetchUserFirstName = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const response = await fetch(`${API_BASE_URL}/user-first-name`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.first_name) {
+          console.log('Got first_name from server:', data.first_name);
+          setUserName(data.first_name);
+          
+          // Update localStorage with correct first_name
+          const userData = localStorage.getItem('user');
+          if (userData) {
+            try {
+              const parsedUser = JSON.parse(userData);
+              parsedUser.first_name = data.first_name;
+              localStorage.setItem('user', JSON.stringify(parsedUser));
+            } catch (err) {
+              console.error('Error updating user data:', err);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching first_name:', error);
+    }
+  };
 
   useEffect(() => {
+    // Get user data from localStorage
     const userData = localStorage.getItem('user');
     if (userData) {
-      setUser(JSON.parse(userData));
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+        
+        // Use first_name from localStorage first
+        if (parsedUser.first_name) {
+          setUserName(parsedUser.first_name);
+        }
+        
+        // Then fetch from server to ensure it's up to date
+        fetchUserFirstName();
+      } catch (err) {
+        console.error('Error parsing user data:', err);
+      }
     }
   }, []);
 
@@ -15,6 +67,7 @@ const Navbar = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
+    setUserName('');
   };
 
   return (
@@ -38,7 +91,7 @@ const Navbar = () => {
           <div className="flex items-center gap-6">
             {user ? (
               <div className="flex items-center gap-4">
-                <span className="text-gray-600">שלום, {user.firstName}</span>
+                <span className="text-gray-600">שלום, {userName || 'משתמש'}</span>
                 <button 
                   onClick={handleLogout}
                   className="text-indigo-600 hover:text-indigo-700 font-medium"

@@ -11,24 +11,33 @@ import { promisify } from 'util';
 // Promisify exec
 const execAsync = promisify(exec);
 
-// Load environment variables
-dotenv.config();
-
+// Load environment variables from correct path, ensuring it works in all contexts
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const envPath = path.resolve(__dirname, '../.env');
+console.log(`Looking for .env file at: ${envPath}`);
+dotenv.config({ path: envPath });
+console.log('Environment variables loaded from:', envPath);
 
 // Log the API key (first few characters) to verify it's loaded
-console.log(`Deepgram API key (first 5 chars): ${process.env.DEEPGRAM_API_KEY?.substring(0, 5)}...`);
-
-// Configure Deepgram with the API key from .env
 const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
-console.log(`Using Deepgram API key: ${deepgramApiKey?.substring(0, 5)}...`);
+console.log(`Deepgram API key (first 5 chars): ${deepgramApiKey?.substring(0, 5) || 'NOT FOUND'}...`);
+console.log(`Using Deepgram API key: ${deepgramApiKey?.substring(0, 5) || 'NOT FOUND'}...`);
 
 // Create the Deepgram client with the correct initialization
-const deepgram = createClient(deepgramApiKey);
+const deepgram = deepgramApiKey ? createClient(deepgramApiKey) : null;
+
+// Check if client was created
+if (!deepgram) {
+  console.error('Failed to create Deepgram client - API key missing or invalid');
+} else {
+  console.log('Deepgram client created successfully');
+}
 
 // Configure Gemini with the API key from .env
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const geminiApiKey = process.env.GEMINI_API_KEY;
+console.log(`Gemini API key (first 5 chars): ${geminiApiKey?.substring(0, 5) || 'NOT FOUND'}...`);
+const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
 
 /**
  * Convert audio file to a format Deepgram can handle
@@ -101,11 +110,31 @@ async function uploadFileToTemporaryStorage(filePath) {
 export async function transcribeAudio(filePath) {
   try {
     console.log(`Transcribing audio file: ${filePath}`);
-    console.log(`Using Deepgram API key: ${deepgramApiKey?.substring(0, 5)}...`);
     
-    // Read the audio file directly
-    const audioFile = fs.readFileSync(filePath);
-    console.log(`Original file size: ${audioFile.length} bytes`);
+    if (!deepgramApiKey) {
+      console.error('No Deepgram API key available - check your .env file');
+      return "Error: Deepgram API key not found. Please check server configuration.";
+    }
+    
+    if (!deepgram) {
+      console.error('Deepgram client not initialized');
+      return "Error: Deepgram client not initialized. Please check server configuration.";
+    }
+    
+    // Convert the audio file to a format Deepgram can better process
+    let fileToTranscribe;
+    try {
+      fileToTranscribe = await convertAudioFile(filePath);
+      console.log(`Using converted file for transcription: ${fileToTranscribe}`);
+    } catch (conversionError) {
+      console.error('Error converting audio file:', conversionError);
+      console.log('Falling back to original file');
+      fileToTranscribe = filePath;
+    }
+    
+    // Read the audio file
+    const audioFile = fs.readFileSync(fileToTranscribe);
+    console.log(`File size for transcription: ${audioFile.length} bytes`);
     
     // Configure Deepgram options for Whisper with Hebrew
     const options = {
@@ -116,7 +145,7 @@ export async function transcribeAudio(filePath) {
     
     console.log(`Sending request to Deepgram with options:`, options);
     
-    // Send to Deepgram for transcription - using the original file directly
+    // Send to Deepgram for transcription
     const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
       audioFile,
       options
@@ -125,35 +154,52 @@ export async function transcribeAudio(filePath) {
     // Check for errors
     if (error) {
       console.error('Deepgram error:', error);
-      return "אירעה שגיאה בתמלול הקובץ. אנא נסה שוב מאוחר יותר.";
+      return "Error transcribing audio. Please try again.";
     }
     
     // Extract transcript
     const transcript = result.results.channels[0].alternatives[0].transcript;
-    console.log(`Transcription complete, length: ${transcript.length}`);
+    console.log(`Transcription complete, length: ${transcript.length}, words: ${transcript.split(' ').length}`);
+    
+    // Clean up converted file if it was created
+    if (fileToTranscribe !== filePath) {
+      await cleanupFile(fileToTranscribe);
+    }
     
     return transcript;
   } catch (error) {
     console.error('Error transcribing audio:', error);
-    return "אירעה שגיאה בתמלול הקובץ. אנא נסה שוב מאוחר יותר.";
+    return "Error during transcription process: " + error.message;
   }
 }
 
 // Function to summarize text
-export async function summarizeText(text) {
+export async function summarizeText(text, customPrompt = null) {
   try {
     console.log(`Summarizing text of length: ${text.length}`);
+    
+    if (!geminiApiKey) {
+      console.error('No Gemini API key available - check your .env file');
+      return "Error: Gemini API key not found. Please check server configuration.";
+    }
+    
+    if (!genAI) {
+      console.error('Gemini client not initialized');
+      return "Error: Gemini client not initialized. Please check server configuration.";
+    }
     
     // Use Gemini to summarize
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
     
-    const prompt = `
+    const prompt = customPrompt || `
     Please summarize the following Hebrew text in Hebrew. 
     Create a comprehensive summary that captures the main points and key details.
     
     Text to summarize:
     ${text}
     `;
+    
+    console.log(`Using prompt${customPrompt ? ' (custom)' : ''} to summarize`);
     
     const result = await model.generateContent(prompt);
     const summary = result.response.text();
@@ -163,7 +209,7 @@ export async function summarizeText(text) {
     return summary;
   } catch (error) {
     console.error('Error summarizing text:', error);
-    return "אירעה שגיאה בסיכום הטקסט. אנא נסה שוב מאוחר יותר.";
+    return "Error during summarization process: " + error.message;
   }
 }
 
