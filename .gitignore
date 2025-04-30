@@ -1,1 +1,4 @@
 node_modules
+# Server uploads
+server/uploads/
+server/temp/
