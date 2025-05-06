@@ -1,11 +1,11 @@
 // Twilio Account Credentials
-const TWILIO_ACCOUNT_SID = 'ACb4be8928129a2139f4591a1ad9aa06ba'; // Your Twilio Account SID
-const TWILIO_AUTH_TOKEN = '91112a6b8e51af2cbbad3dab41f6740e'; // Your Twilio Auth Token (get this from Twilio Console)
-const VERIFY_SERVICE_SID = 'VA1e8a0d0ba74244c6e4129cb7ccefb908'; // Your Verify Service SID
+const TWILIO_ACCOUNT_SID = import.meta.env.VITE_TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = import.meta.env.VITE_TWILIO_AUTH_TOKEN;
+const VERIFY_SERVICE_SID = import.meta.env.VITE_VERIFY_SERVICE_SID;
 
 export const sendVerificationSMS = async (phoneNumber) => {
   try {
-    const response = await fetch('https://verify.twilio.com/v2/Services/VA1e8a0d0ba74244c6e4129cb7ccefb908/Verifications', {
+    const response = await fetch(`https://verify.twilio.com/v2/Services/${VERIFY_SERVICE_SID}/Verifications`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
