@@ -19,12 +19,12 @@ const Pricing = () => {
       ],
       cta: "התחל בחינם",
       popular: false,
-      color: "gray"
+      color: "white"
     },
     {
       name: "מנוי פלוס",
       price: "37",
-      description: "במחיר של סמבוסק ופיצה",
+      description: "במחיר של קפה ומאפה תקבלו:",
       features: [
         { text: "העלאת עד 12 הרצאות בחודש", included: true },
         { text: "תמלולים וסיכומים מהרצאות בלייב", included: true },
@@ -35,13 +35,14 @@ const Pricing = () => {
         { text: "כלים מתקדמים לארגון וחיפוש", included: false }
       ],
       cta: "הצטרף עכשיו",
+      ctaLink: "https://pay.sumit.co.il/cozxmk/ehj27b/ehr093/payment/",
       popular: true,
       color: "indigo"
     },
     {
       name: "מנוי פרו",
       price: "75",
-      description: "במחיר של מגש פיצה משפחתית",
+      description: " במחיר של מגש פיצה משפחתית תקבלו:",
       features: [
         { text: "העלאת עד 20 הרצאות בחודש", included: true },
         { text: "אפשרות לחסוך הרצאות לחודש הבא", included: true },
@@ -52,6 +53,7 @@ const Pricing = () => {
         { text: "כלים מתקדמים לארגון וחיפוש", included: true }
       ],
       cta: "שדרג לפרו",
+      ctaLink: "https://pay.sumit.co.il/cozxmk/ehj27b/ehqy95/payment/",
       popular: false,
       color: "purple"
     }
@@ -118,21 +120,28 @@ const Pricing = () => {
                   ))}
                 </ul>
                 
-                <Link to="/signup">
-                  <button 
-                    className={`
-                      w-full py-3 px-6 rounded-lg font-medium transition-colors duration-200
-                      ${plan.popular 
-                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
-                        : plan.color === 'purple' 
-                          ? 'bg-purple-600 hover:bg-purple-700 text-white'
-                          : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
-                      }
-                    `}
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <a
+                    href="https://pay.sumit.co.il/cozxmk/ehj27b/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      backgroundColor: plan.color === 'indigo' ? 'indigo' : plan.color === 'purple' ? 'purple' : 'gray',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '12px 20px',
+                      cursor: 'pointer',
+                      fontSize: '1rem',
+                      textDecoration: 'none',
+                      width: '100%',
+                      textAlign: 'center',
+                      display: 'inline-block'
+                    }}
                   >
-                    {plan.cta}
-                  </button>
-                </Link>
+                    הצטרף עכשיו
+                  </a>
+                </div>
               </div>
             </div>
           ))}
