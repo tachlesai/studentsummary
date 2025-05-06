@@ -9,6 +9,8 @@ import SignupSuccess from './pages/SignupSuccess';
 import StudentDashboard from './pages/StudentDashboard';
 import SummaryResult from './pages/SummaryResult';
 import AudioRecordingPage from './pages/AudioRecordingPage';
+import MembershipPayment from './pages/MembershipPayment';
+import AccountDetails from './pages/AccountDetails';
 
 function App() {
   return (
@@ -25,6 +27,8 @@ function App() {
               <Route path="/dashboard" element={<StudentDashboard />} />
               <Route path="/summary-result" element={<SummaryResult />} />
               <Route path="/record-audio" element={<AudioRecordingPage />} />
+              <Route path="/membership-payment" element={<MembershipPayment />} />
+              <Route path="/account-details" element={<AccountDetails />} />
             </Routes>
           </div>
         </div>

@@ -6,6 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { processAudio } from './Transcribe_and_summarize/directAudioProcessor.js';
 import db from './db.js';
+import bcrypt from 'bcryptjs';
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -362,7 +363,6 @@ app.post('/api/process-recording', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password, credential } = req.body;
-    
     // Handle regular login
     if (email && password) {
       // Check if the user exists in the database
@@ -370,16 +370,17 @@ app.post('/api/login', async (req, res) => {
       let userId = 0;
       let firstName = '';
       let usageCount = 0;
-      
+      let dbPassword = '';
       try {
-        const userResult = await db.query('SELECT id, first_name, usage_count FROM users WHERE email = $1', [email]);
+        const userResult = await db.query('SELECT user_id, first_name, usage_count, password FROM users WHERE email = $1', [email]);
+        console.log('User query result:', userResult.rows);
         userExists = userResult.rows.length > 0;
-        
         if (userExists) {
           const user = userResult.rows[0];
           firstName = user.first_name || '';
-          userId = user.id;
+          userId = user.user_id;
           usageCount = user.usage_count || 0;
+          dbPassword = user.password;
           console.log(`User found: ${firstName} (${email}), usage count: ${usageCount}`);
         } else {
           console.log(`User not found in DB: ${email}`);
@@ -387,7 +388,13 @@ app.post('/api/login', async (req, res) => {
       } catch (userErr) {
         console.log('Error checking user:', userErr);
       }
-      
+      // Compare password using bcrypt
+      console.log('Login attempt:', { email, password, dbPassword });
+      const passwordMatch = await bcrypt.compare(password, dbPassword);
+      console.log('Password match:', passwordMatch);
+      if (!userExists || !passwordMatch) {
+        return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+      }
       // Create a JWT-like token with the email in the payload
       const tokenPayload = {
         email: email,
@@ -396,11 +403,9 @@ app.post('/api/login', async (req, res) => {
         usage_count: usageCount,
         iat: Math.floor(Date.now() / 1000)
       };
-      
       // Base64 encode the payload (simple mock of JWT)
       const base64Payload = Buffer.from(JSON.stringify(tokenPayload)).toString('base64');
       const mockToken = `mock.${base64Payload}.signature`;
-      
       return res.json({
         success: true,
         token: mockToken,
@@ -412,7 +417,6 @@ app.post('/api/login', async (req, res) => {
         }
       });
     }
-    
     return res.status(400).json({ 
       success: false, 
       message: 'Invalid request. Please provide email and password.' 
@@ -590,7 +594,7 @@ app.get('/api/user-first-name', async (req, res) => {
     }
     
     const firstName = result.rows[0].first_name || '';
-    
+
     res.json({
       success: true,
       first_name: firstName
@@ -620,6 +624,131 @@ app.post('/api/update-usage', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('Error updating usage count:', error);
     return res.status(500).json({ success: false, error: 'Failed to update usage count' });
+  }
+});
+
+// Registration endpoint
+app.post('/api/register', async (req, res) => {
+  try {
+    const { firstName, lastName, email, password, phoneNumber } = req.body;
+    if (!firstName || !lastName || !email || !password || !phoneNumber) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+    // Check if user already exists by email or phone number
+    let userExists = false;
+    let userId = 0;
+    try {
+      const userResult = await db.query('SELECT user_id FROM users WHERE email = $1 OR phone_number = $2', [email, phoneNumber]);
+      userExists = userResult.rows.length > 0;
+      if (userExists) {
+        return res.status(409).json({ success: false, message: 'User with this email or phone number already exists' });
+      }
+    } catch (userErr) {
+      console.log('Error checking user:', userErr);
+    }
+    // Hash the password before saving
+    const hashedPassword = await bcrypt.hash(password, 10);
+    // Insert new user
+    let newUser;
+    try {
+      const insertResult = await db.query(
+        'INSERT INTO users (first_name, last_name, email, password, phone_number, usage_count) VALUES ($1, $2, $3, $4, $5, 0) RETURNING user_id, first_name, email, usage_count',
+        [firstName, lastName, email, hashedPassword, phoneNumber]
+      );
+      newUser = insertResult.rows[0];
+      userId = newUser.user_id;
+    } catch (insertErr) {
+      console.log('Error inserting user:', insertErr);
+      return res.status(500).json({ success: false, message: 'Failed to create user' });
+    }
+    // Create a JWT-like token with the email in the payload
+    const tokenPayload = {
+      email: email,
+      id: userId,
+      first_name: firstName,
+      usage_count: 0,
+      iat: Math.floor(Date.now() / 1000)
+    };
+    const base64Payload = Buffer.from(JSON.stringify(tokenPayload)).toString('base64');
+    const mockToken = `mock.${base64Payload}.signature`;
+    return res.json({
+      success: true,
+      token: mockToken,
+      user: {
+        id: userId,
+        email: email,
+        first_name: firstName,
+        usage_count: 0
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ success: false, message: 'Failed to process registration' });
+  }
+});
+
+// Check if user exists by email or phone number
+app.post('/api/check-user-exists', async (req, res) => {
+  try {
+    const { email, phoneNumber } = req.body;
+    const userResult = await db.query('SELECT user_id FROM users WHERE email = $1 OR phone_number = $2', [email, phoneNumber]);
+    if (userResult.rows.length > 0) {
+      return res.json({ exists: true });
+    }
+    return res.json({ exists: false });
+  } catch (error) {
+    console.error('Check user exists error:', error);
+    res.status(500).json({ exists: false, error: 'Failed to check user' });
+  }
+});
+
+// Account details endpoint
+app.get('/api/account-details', async (req, res) => {
+  try {
+    let userEmail = null;
+    const token = req.headers.authorization?.split(' ')[1];
+    if (token) {
+      try {
+        if (token.split('.').length === 3) {
+          const payload = token.split('.')[1];
+          const decoded = Buffer.from(payload, 'base64').toString();
+          const tokenData = JSON.parse(decoded);
+          if (tokenData && tokenData.email) {
+            userEmail = tokenData.email;
+          }
+        }
+      } catch (err) {
+        console.log('Error parsing token:', err.message);
+      }
+    }
+    if (!userEmail) {
+      return res.status(401).json({ success: false, message: 'No user email found in token' });
+    }
+    // Fetch user details from DB
+    const result = await db.query('SELECT first_name, email, membership_type FROM users WHERE email = $1', [userEmail]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    const user = result.rows[0];
+    // membershipStatus is 'Premium' if membership_type is 'payed', else 'Free'
+    const membershipStatus = user.membership_type === 'payed' ? 'Premium' : 'Free';
+    // Placeholder receipt (replace with real receipt logic if available)
+    const receipt = membershipStatus === 'Premium' ? {
+      id: '1234567890',
+      date: '2024-05-05',
+      amount: '₪99',
+      url: '#'
+    } : null;
+    res.json({
+      success: true,
+      name: user.first_name || '',
+      email: user.email,
+      membershipStatus,
+      receipt
+    });
+  } catch (error) {
+    console.error('Error fetching account details:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch account details' });
   }
 });
 

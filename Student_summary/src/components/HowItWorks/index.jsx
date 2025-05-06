@@ -1,49 +1,57 @@
 import React from 'react';
-import './HowItWorks.css';
-import { FiUpload, FiStar, FiBook } from 'react-icons/fi';
+import { isUserLoggedIn } from '../../utils/auth';
 
 const HowItWorks = () => {
-  const steps = [
-    {
-      icon: <FiUpload />,
-      title: 'העלה את החומר',
-      description: 'העלה קובץ PDF, הקלטה או קישור ליוטיוב',
-      number: '1'
-    },
-    {
-      icon: <FiStar />,
-      title: 'הבינה המלאכותית מעבדת',
-      description: 'המערכת מנתחת את החומר ומייצרת תוכן מותאם אישית',
-      number: '2'
-    },
-    {
-      icon: <FiBook />,
-      title: 'התחל ללמוד',
-      description: 'קבל סיכומים, שאלות תשובות, והסברים מותאמים אישית',
-      number: '3'
-    }
-  ];
-
   return (
-    <section className="how-it-works">
-      <h2 className="section-title">איך זה עובד?</h2>
-      <p className="section-subtitle">בשלושה צעדים פשוטים תוכל להתחיל ללמוד בצורה חכמה יותר</p>
-      
-      <div className="steps-container">
-        {steps.map((step, index) => (
-          <div key={index} className="step-card">
-            <div className="step-number">{step.number}</div>
-            <div className="step-icon">{step.icon}</div>
-            <h3 className="step-title">{step.title}</h3>
-            <p className="step-description">{step.description}</p>
+    <section className="py-24 bg-white">
+      <div className="max-w-7xl mx-auto px-8">
+        <div className="text-center mb-16">
+          <h2 className="text-4xl font-bold text-gray-900">
+            איך זה עובד?
+          </h2>
+          <p className="mt-4 text-xl text-gray-600 max-w-2xl mx-auto">
+            שלושה שלבים פשוטים להפקת סיכומים אוטומטיים
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="text-center p-8">
+            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="text-2xl font-bold text-indigo-600">1</span>
+            </div>
+            <h3 className="text-xl font-semibold mb-4">הקלט את ההרצאה</h3>
+            <p className="text-gray-600">הקלט את ההרצאה שלך באמצעות המיקרופון או העלה קובץ אודיו</p>
           </div>
-        ))}
-      </div>
-      
-      <div className="flex justify-center">
-        <button className="cta-button px-6 py-3 text-base font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 w-64">
-          התחל עכשיו בחינם
-        </button>
+
+          <div className="text-center p-8">
+            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="text-2xl font-bold text-indigo-600">2</span>
+            </div>
+            <h3 className="text-xl font-semibold mb-4">עיבוד אוטומטי</h3>
+            <p className="text-gray-600">המערכת מעבדת את ההקלטה ומפיקה תמלול מדויק</p>
+          </div>
+
+          <div className="text-center p-8">
+            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="text-2xl font-bold text-indigo-600">3</span>
+            </div>
+            <h3 className="text-xl font-semibold mb-4">קבל סיכום</h3>
+            <p className="text-gray-600">קבל סיכום מפורט של ההרצאה בפורמט PDF</p>
+          </div>
+        </div>
+
+        <div className="flex justify-center mt-12">
+          <a 
+            href={isUserLoggedIn() ? '/dashboard' : '/signup'}
+            className="inline-block px-6 py-3 text-base font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 w-64 text-center"
+            onClick={(e) => {
+              e.preventDefault();
+              window.location.href = isUserLoggedIn() ? '/dashboard' : '/signup';
+            }}
+          >
+            התחל עכשיו בחינם
+          </a>
+        </div>
       </div>
     </section>
   );

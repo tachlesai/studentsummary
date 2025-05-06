@@ -10,6 +10,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
+import { encode } from 'gpt-3-encoder';
 
 // Promisify exec
 const execAsync = promisify(exec);
@@ -340,6 +341,70 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
 }
 
 /**
+ * Split audio file into 30-minute chunks using ffmpeg
+ * @param {string} filePath - Path to the audio file
+ * @returns {Promise<string[]>} - Array of chunk file paths
+ */
+async function splitAudioIfNeeded(filePath) {
+  const stats = fs.statSync(filePath);
+  const fileSizeMB = stats.size / 1024 / 1024;
+
+  // Get duration using ffprobe
+  const ffprobeCmd = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`;
+  const { stdout: durationStr } = await execAsync(ffprobeCmd);
+  const duration = parseFloat(durationStr);
+
+  // If file is under 100MB and under 30 minutes, no need to split
+  if (fileSizeMB <= 100 && duration <= 30 * 60) {
+    return [filePath];
+  }
+
+  // Split into 30-minute chunks
+  const outputDir = path.dirname(filePath);
+  const baseName = path.basename(filePath, path.extname(filePath));
+  const chunkPattern = path.join(outputDir, `${baseName}_chunk_%03d${path.extname(filePath)}`);
+  const splitCmd = `ffmpeg -i "${filePath}" -f segment -segment_time 1800 -c copy "${chunkPattern}"`;
+  await execAsync(splitCmd);
+
+  // Find all chunk files
+  const chunkFiles = fs.readdirSync(outputDir)
+    .filter(f => f.startsWith(baseName + '_chunk_') && f.endsWith(path.extname(filePath)))
+    .map(f => path.join(outputDir, f));
+
+  return chunkFiles;
+}
+
+// Helper: sleep for ms milliseconds
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Helper: Gemini API call with retry on 429
+async function callGeminiWithRetry(fn, ...args) {
+  let attempts = 0;
+  while (true) {
+    try {
+      return await fn(...args);
+    } catch (err) {
+      // Check for 429 error
+      if (err && err.message && err.message.includes('429')) {
+        // Try to extract retryDelay from error message
+        let retryMs = 60000; // default 60s
+        const match = err.message.match(/"retryDelay":"(\d+)s"/);
+        if (match) {
+          retryMs = parseInt(match[1], 10) * 1000;
+        }
+        console.warn(`[DirectProcessor] Gemini 429 error, waiting ${retryMs / 1000}s before retrying...`);
+        await sleep(retryMs);
+        attempts++;
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+/**
  * Process audio file - main function
  * @param {string} filePath - Path to the audio file
  * @param {object} options - Processing options
@@ -359,28 +424,84 @@ export async function processAudio(filePath, options = {}) {
       throw new Error(`File does not exist: ${filePath}`);
     }
     
-    const fileStats = fs.statSync(filePath);
-    console.log(`[DirectProcessor] Audio file size: ${fileStats.size} bytes (${(fileStats.size / 1024 / 1024).toFixed(2)}MB)`);
-    
-    // Step 2: Process based on output type
+    // Step 2: Split if needed
+    const chunkFiles = await splitAudioIfNeeded(filePath);
+    let allTranscripts = [];
+    let allSummaries = [];
+    for (const chunk of chunkFiles) {
+      const fileStats = fs.statSync(chunk);
+      console.log(`[DirectProcessor] Processing chunk: ${chunk} (${(fileStats.size / 1024 / 1024).toFixed(2)}MB)`);
+      await sleep(2000); // 2 second delay between requests
+      if (options.onlyTranscribe) {
+        const chunkTranscript = await callGeminiWithRetry(transcribeWithGemini, chunk);
+        const chunkTokens = encode(chunkTranscript).length;
+        console.log(`[DirectProcessor] Chunk transcript token count: ${chunkTokens}`);
+        allTranscripts.push(chunkTranscript);
+      } else {
+        // Always transcribe first for summary
+        const chunkTranscript = await callGeminiWithRetry(transcribeWithGemini, chunk);
+        const chunkTokens = encode(chunkTranscript).length;
+        console.log(`[DirectProcessor] Chunk transcript token count: ${chunkTokens}`);
+        allTranscripts.push(chunkTranscript);
+      }
+    }
     if (options.onlyTranscribe) {
-      // If only transcription is requested
-      console.log(`[DirectProcessor] Starting transcription process...`);
-      transcript = await transcribeWithGemini(filePath);
-      console.log(`[DirectProcessor] Transcription completed successfully`);
+      transcript = allTranscripts.join('\n---\n');
       return {
         success: true,
         transcript,
         summary: null
       };
     } else {
-      // If summarization is requested, send directly to Gemini for summarization
-      console.log(`[DirectProcessor] Starting direct audio summarization...`);
-      summary = await summarizeAudioWithGemini(filePath, options);
-      console.log(`[DirectProcessor] Summarization completed successfully`);
+      // Count tokens in the full transcript
+      transcript = allTranscripts.join('\n');
+      const tokenCount = encode(transcript).length;
+      console.log(`[DirectProcessor] Transcript token count: ${tokenCount}`);
+      if (tokenCount > 120000) {
+        // Too long for Gemini, use summary of summaries
+        console.log('[DirectProcessor] Transcript too long, using summary of summaries approach');
+        // Summarize each chunk transcript
+        for (const chunkTranscript of allTranscripts) {
+          await sleep(2000);
+          const chunkSummary = await callGeminiWithRetry(async (text) => {
+            // Use Gemini to summarize text
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+            const prompt = `סכם את הטקסט הבא בעברית ברמה ידידותית לסטודנט, כולל כותרות, דגשים, וטיפים ללמידה:\n\n${text}`;
+            const result = await model.generateContent([prompt]);
+            return result.response.text();
+          }, chunkTranscript);
+          const summaryTokens = encode(chunkSummary).length;
+          console.log(`[DirectProcessor] Chunk summary token count: ${summaryTokens}`);
+          allSummaries.push(chunkSummary);
+        }
+        // Now summarize all summaries together
+        const summariesText = allSummaries.join('\n');
+        const summariesTokens = encode(summariesText).length;
+        console.log(`[DirectProcessor] All summaries token count: ${summariesTokens}`);
+        const finalSummary = await callGeminiWithRetry(async (text) => {
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+          const prompt = `סכם את כל הסיכומים הבאים לסיכום אחד ברור, לא חזרתי, ומסודר:\n\n${text}`;
+          const result = await model.generateContent([prompt]);
+          return result.response.text();
+        }, summariesText);
+        const finalSummaryTokens = encode(finalSummary).length;
+        console.log(`[DirectProcessor] Final summary token count: ${finalSummaryTokens}`);
+        summary = finalSummary;
+      } else {
+        // Full transcript is within token limit, summarize as one
+        console.log(`[DirectProcessor] Sending full transcript to Gemini for summary. Token count: ${tokenCount}`);
+        summary = await callGeminiWithRetry(async (text) => {
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+          const prompt = `סכם את הטקסט הבא בעברית ברמה ידידותית לסטודנט, כולל כותרות, דגשים, וטיפים ללמידה:\n\n${text}`;
+          const result = await model.generateContent([prompt]);
+          return result.response.text();
+        }, transcript);
+        const summaryTokens = encode(summary).length;
+        console.log(`[DirectProcessor] Full summary token count: ${summaryTokens}`);
+      }
       return {
         success: true,
-        transcript: null,
+        transcript,
         summary
       };
     }

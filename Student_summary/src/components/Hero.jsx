@@ -1,4 +1,5 @@
 import React from 'react';
+import { isUserLoggedIn } from '../utils/auth';
 
 const Hero = () => {
   return (
@@ -20,9 +21,16 @@ const Hero = () => {
             </div>
             
             <div className="flex flex-col items-center space-y-6">
-              <button className="w-64 bg-indigo-600 text-white px-8 py-4 rounded-xl hover:bg-indigo-700 transition-all transform hover:scale-105 shadow-lg hover:shadow-xl font-medium text-lg">
+              <a 
+                href={isUserLoggedIn() ? '/dashboard' : '/signup'}
+                className="w-64 bg-indigo-600 text-white px-8 py-4 rounded-xl hover:bg-indigo-700 transition-all transform hover:scale-105 shadow-lg hover:shadow-xl font-medium text-lg text-center"
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.location.href = isUserLoggedIn() ? '/dashboard' : '/signup';
+                }}
+              >
                 התחל בחינם ←
-              </button>
+              </a>
               
               <div className="flex items-center space-x-4 space-x-reverse mt-8">
                 <div className="text-sm text-gray-600">

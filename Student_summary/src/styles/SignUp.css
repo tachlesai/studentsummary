@@ -20,7 +20,7 @@ body {
   align-items: center;
   justify-content: flex-start;
   min-height: 100vh;
-  width: 100vw;
+  /* width: 100vw; */
   background-color: white;
   padding: 0;
   margin: 0;
@@ -52,7 +52,7 @@ body {
 
 .signup-container .form-group {
   width: 100%;
-  max-width: 400px;
+  /* max-width: 400px; */
   margin-bottom: 20px;
 }
 
@@ -76,7 +76,7 @@ body {
 
 .signup-container button {
   width: 100%;
-  max-width: 400px;
+  /* max-width: 400px; */
   padding: 16px;
   background-color: #2563eb;
   color: white;
@@ -96,7 +96,7 @@ body {
 
 .signup-container .error-message {
   width: 100%;
-  max-width: 400px;
+  /* max-width: 400px; */
   background-color: #fee2e2;
   color: #dc2626;
   padding: 16px;
@@ -125,12 +125,12 @@ body {
 /* Add this to ensure form content is centered and has proper width */
 .signup-container form > div {
   width: 100%;
-  max-width: 400px;
+  /* max-width: 400px; */
   margin: 0 auto;
 }
 
 .signup-form {
-  width: 100vh;
+  /* width: 100vh; */
 }
 
 .signup-form h2 {

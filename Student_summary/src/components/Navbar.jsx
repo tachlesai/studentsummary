@@ -83,7 +83,8 @@ const Navbar = () => {
               <Link to="/record-audio" className="text-gray-600 hover:text-indigo-600">הקלטות</Link>
               <a href="/#capabilities" className="text-gray-600 hover:text-indigo-600">יכולות</a>
               <a href="/#solutions" className="text-gray-600 hover:text-indigo-600">פתרונות</a>
-              <a href="/#pricing" className="text-gray-600 hover:text-indigo-600">תמחור</a>
+              <Link to="/membership-payment" className="text-gray-700 hover:text-blue-600">תמחור</Link>
+              <Link to="/account-details" className="text-gray-700 hover:text-blue-600">אזור אישי</Link>
             </div>
           </div>
 

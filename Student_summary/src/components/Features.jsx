@@ -1,37 +1,45 @@
 import React from 'react';
-import { Zap, Clock, Brain, Target, Sparkles, Shield } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { isUserLoggedIn } from '../utils/auth';
+import { FiMic, FiBook, FiClock, FiBarChart2, FiDownload, FiShare2 } from 'react-icons/fi';
 
 const Features = () => {
+  // Direct console log
+  console.log('Features component rendering');
+  console.log('isUserLoggedIn:', isUserLoggedIn());
+  console.log('localStorage token:', localStorage.getItem('token'));
+  console.log('localStorage user:', localStorage.getItem('user'));
+
   const features = [
     {
-      icon: <Brain className="w-8 h-8 text-indigo-600" />,
-      title: "למידה חכמה יותר",
-      description: "הבינה המלאכותית שלנו מזהה את סגנון הלמידה שלך ומתאימה את התוכן בהתאם"
+      icon: <FiMic className="w-6 h-6 text-indigo-600" />,
+      title: 'הקלטה קלה',
+      description: 'הקלט את ההרצאות שלך בקלות ובמהירות'
     },
     {
-      icon: <Clock className="w-8 h-8 text-indigo-600" />,
-      title: "חיסכון בזמן",
-      description: "קבל סיכומים מדויקים תוך דקות במקום שעות של למידה מסורתית"
+      icon: <FiBook className="w-6 h-6 text-indigo-600" />,
+      title: 'סיכומים אוטומטיים',
+      description: 'קבל סיכומים מפורטים של ההרצאות שלך'
     },
     {
-      icon: <Target className="w-8 h-8 text-indigo-600" />,
-      title: "דיוק מקסימלי",
-      description: "אלגוריתמים מתקדמים מבטיחים דיוק של 95% בסיכומים"
+      icon: <FiClock className="w-6 h-6 text-indigo-600" />,
+      title: 'חיסכון בזמן',
+      description: 'חסוך שעות של כתיבת סיכומים'
     },
     {
-      icon: <Sparkles className="w-8 h-8 text-indigo-600" />,
-      title: "תוכן מותאם אישית",
-      description: "כל סיכום מותאם לצרכים הספציפיים שלך ולסגנון הלמידה המועדף עליך"
+      icon: <FiBarChart2 className="w-6 h-6 text-indigo-600" />,
+      title: 'למידה חכמה',
+      description: 'התמקד בחומר החשוב באמת'
     },
     {
-      icon: <Shield className="w-8 h-8 text-indigo-600" />,
-      title: "אבטחה מתקדמת",
-      description: "הנתונים שלך מאובטחים עם הצפנה מתקדמת ואמצעי אבטחה קפדניים"
+      icon: <FiDownload className="w-6 h-6 text-indigo-600" />,
+      title: 'ייצוא PDF',
+      description: 'שמור את הסיכומים שלך בפורמט PDF'
     },
     {
-      icon: <Zap className="w-8 h-8 text-indigo-600" />,
-      title: "מהירות מרבית",
-      description: "קבל תשובות ועזרה בזמן אמת, בכל שעה ומכל מקום"
+      icon: <FiShare2 className="w-6 h-6 text-indigo-600" />,
+      title: 'שיתוף קל',
+      description: 'שתף את הסיכומים שלך עם חברים'
     }
   ];
 
@@ -71,11 +79,19 @@ const Features = () => {
           ))}
         </div>
 
-        <div className="flex justify-center">
-        <button className="cta-button px-6 py-3 text-base font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 w-64">
-          התחל עכשיו בחינם
-        </button>
-      </div>
+        <div className="flex justify-center mt-12">
+          <a 
+            href={isUserLoggedIn() ? '/dashboard' : '/signup'}
+            className="inline-block px-6 py-3 text-base font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 w-64 text-center"
+            onClick={(e) => {
+              e.preventDefault();
+              console.log('Button clicked');
+              window.location.href = isUserLoggedIn() ? '/dashboard' : '/signup';
+            }}
+          >
+            התחל עכשיו בחינם
+          </a>
+        </div>
       </div>
     </section>
   );
