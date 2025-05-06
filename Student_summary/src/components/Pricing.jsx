@@ -2,6 +2,62 @@ import React from 'react';
 import { isUserLoggedIn } from '../utils/auth';
 
 const Pricing = () => {
+  const plans = [
+    {
+      name: "מנוי חינמי",
+      price: "0",
+      description: "מושלם להתחלה ולהתנסות במערכת",
+      features: [
+        { text: "העלאת עד 5 הרצאות בחודש", included: true },
+        { text: "חיסכון של עד 8 שעות בחודש", included: true },
+        { text: "סיכום טקסט בסיסי", included: true },
+        { text: "תמיכה בסיסית", included: true },
+        { text: "תמלולים וסיכומים מהרצאות בלייב", included: false },
+        { text: "אפשרות לחסוך הרצאות לחודש הבא", included: false },
+        { text: "ייצוא לפורמטים שונים", included: false }
+      ],
+      cta: "התחל בחינם",
+      popular: false,
+      color: "white"
+    },
+    {
+      name: "מנוי פלוס",
+      price: "37",
+      description: "במחיר של קפה ומאפה תקבלו:",
+      features: [
+        { text: "העלאת עד 12 הרצאות בחודש", included: true },
+        { text: "תמלולים וסיכומים מהרצאות בלייב", included: true },
+        { text: "סיכום טקסט מתקדם", included: true },
+        { text: "תמיכה מועדפת", included: true },
+        { text: "ייצוא לפורמטים שונים", included: true },
+        { text: "אפשרות לחסוך הרצאות לחודש הבא", included: false },
+        { text: "כלים מתקדמים לארגון וחיפוש", included: false }
+      ],
+      cta: "הצטרף עכשיו",
+      ctaLink: "https://pay.sumit.co.il/cozxmk/ehj27b/ehr093/payment/",
+      popular: true,
+      color: "indigo"
+    },
+    {
+      name: "מנוי פרו",
+      price: "75",
+      description: " במחיר של מגש פיצה משפחתית תקבלו:",
+      features: [
+        { text: "העלאת עד 20 הרצאות בחודש", included: true },
+        { text: "אפשרות לחסוך הרצאות לחודש הבא", included: true },
+        { text: "תמלולים וסיכומים מהרצאות בלייב", included: true },
+        { text: "סיכום טקסט מתקדם עם AI", included: true },
+        { text: "תמיכה VIP", included: true },
+        { text: "ייצוא לכל הפורמטים", included: true },
+        { text: "כלים מתקדמים לארגון וחיפוש", included: true }
+      ],
+      cta: "שדרג לפרו",
+      ctaLink: "https://pay.sumit.co.il/cozxmk/ehj27b/ehqy95/payment/",
+      popular: false,
+      color: "purple"
+    }
+  ];
+
   return (
     <section className="py-24 bg-white">
       <div className="max-w-7xl mx-auto px-8">
@@ -77,6 +133,22 @@ const Pricing = () => {
               התחל בחינם
             </a>
           </div>
+        </div>
+        
+        {/* FAQ or Additional Info */}
+        <div className="mt-20 text-center">
+          <h3 className="text-2xl font-bold text-gray-900 mb-4">
+            יש לך שאלות?
+          </h3>
+          <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
+            אנחנו כאן כדי לעזור. צור איתנו קשר בכל שאלה לגבי התוכניות שלנו או כיצד TachlesAI יכול לעזור לך בלימודים.
+          </p>
+          <a 
+            href="mailto:support@tachlesai.com" 
+            className="text-indigo-600 hover:text-indigo-800 font-medium"
+          >
+            צור קשר עם התמיכה
+          </a>
         </div>
       </div>
     </section>
