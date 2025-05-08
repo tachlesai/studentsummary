@@ -77,6 +77,66 @@ const ComparisonTable = () => {
             </div>
           ))}
         </div>
+
+        {/* טבלת השוואה קטנה בין TachlesAI למתחרים */}
+        <div style={{ marginTop: '40px', marginBottom: '40px', direction: 'rtl', display: 'flex', justifyContent: 'center' }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '540px',
+            background: 'linear-gradient(90deg, #e0e7ff 0%, #f3f6fa 100%)',
+            borderRadius: '22px',
+            boxShadow: '0 4px 24px 0 rgba(99,102,241,0.10)',
+            overflow: 'hidden',
+            padding: '0',
+            border: '1.5px solid #e0e7ff',
+            fontFamily: 'Varela Round, Arial, sans-serif'
+          }}>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#4f46e5', margin: '0', padding: '24px 0 8px 0', textAlign: 'center', letterSpacing: '-1px', background: 'none', fontFamily: 'inherit' }}>
+              <span style={{fontSize:'1.7rem', verticalAlign:'middle', marginLeft:'8px'}}>✨</span>
+              למה לבחור ב-TachlesAI ולא במתחרים?
+            </h3>
+            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, background: 'none', fontFamily: 'inherit' }}>
+              <thead>
+                <tr style={{ background: 'rgba(99,102,241,0.08)' }}>
+                  <th style={{ padding: '16px', fontWeight: 900, color: '#6366f1', fontSize: '1.15rem', borderBottom: '2px solid #e0e7ff', textAlign: 'center', background: 'rgba(99,102,241,0.10)', fontFamily: 'inherit', letterSpacing: '-0.5px' }}>TachlesAI 🚀</th>
+                  <th style={{ padding: '16px', fontWeight: 900, color: '#64748b', fontSize: '1.15rem', borderBottom: '2px solid #e0e7ff', textAlign: 'center', background: 'rgba(203,213,225,0.10)', fontFamily: 'inherit', letterSpacing: '-0.5px' }}>מתחרים 🏢</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={{ padding: '18px', fontWeight: 700, color: '#222', background: '#f1f5ff', borderRight: '2.5px solid #6366f1', textAlign: 'center', fontSize: '1.08rem', fontFamily: 'inherit', letterSpacing: '-0.2px' }}>
+                    <span style={{fontSize:'1.2rem', marginLeft:'6px'}}>💙</span>
+                    יחס אישי, מיקוד אמיתי בצרכי הסטודנט, והצלחה שלך באמת חשובה לנו
+                  </td>
+                  <td style={{ padding: '18px', color: '#555', background: '#f9fafb', textAlign: 'center', fontSize: '1.08rem', fontFamily: 'inherit', letterSpacing: '-0.2px' }}>
+                    <span style={{fontSize:'1.2rem', marginLeft:'6px'}}>😐</span>
+                    פתרונות כלליים, פחות אכפתיות להצלחה אישית
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '18px', color: '#222', background: '#f1f5ff', borderRight: '2.5px solid #6366f1', textAlign: 'center', fontWeight: 600, fontSize: '1.08rem', fontFamily: 'inherit', letterSpacing: '-0.2px' }}>
+                    <span style={{fontSize:'1.2rem', marginLeft:'6px'}}>🎯</span>
+                    התאמה אישית לשאלות, תרגול ממוקד, ליווי עד ההצלחה
+                  </td>
+                  <td style={{ padding: '18px', color: '#555', background: '#f9fafb', textAlign: 'center', fontSize: '1.08rem', fontFamily: 'inherit', letterSpacing: '-0.2px' }}>
+                    <span style={{fontSize:'1.2rem', marginLeft:'6px'}}>📄</span>
+                    מענה שטחי, לא מותאם אישית
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ padding: '18px', color: '#222', background: '#f1f5ff', borderRight: '2.5px solid #6366f1', textAlign: 'center', fontWeight: 600, fontSize: '1.08rem', fontFamily: 'inherit', letterSpacing: '-0.2px' }}>
+                    <span style={{fontSize:'1.2rem', marginLeft:'6px'}}>🤖</span>
+                    AI שמבין אותך באמת!
+                  </td>
+                  <td style={{ padding: '18px', color: '#555', background: '#f9fafb', textAlign: 'center', fontSize: '1.08rem', fontFamily: 'inherit', letterSpacing: '-0.2px' }}>
+                    <span style={{fontSize:'1.2rem', marginLeft:'6px'}}>🤷‍♂️</span>
+                    AI גנרי, לא מתעמק בצרכים שלך
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
   );
