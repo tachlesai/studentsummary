@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Container,
   Paper,
   TextField,
   Button,
@@ -29,7 +28,6 @@ const YouTubeSummarizer = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    
     try {
       const response = await fetch('/api/summarize-youtube', {
         method: 'POST',
@@ -38,11 +36,9 @@ const YouTubeSummarizer = () => {
         },
         body: JSON.stringify({ url, summaryType }),
       });
-      
       if (!response.ok) {
         throw new Error('Failed to summarize video');
       }
-      
       const data = await response.json();
       setSummary(data.summary);
     } catch (err) {
@@ -53,89 +49,98 @@ const YouTubeSummarizer = () => {
   };
 
   return (
-    <Box sx={{ pt: '64px' }}>
-      <Container maxWidth="sm" sx={{ py: 4 }}>
-        <Paper 
-          elevation={1} 
-          sx={{ 
-            p: 4, 
-            borderRadius: 2,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}
-        >
-          <Typography 
-            variant="h4" 
-            component="h1" 
-            gutterBottom 
-            align="center"
-            sx={{ mb: 4, fontWeight: 'normal' }}
-          >
-            סכם סרטון YouTube
-          </Typography>
-          
-          <Box component="form" onSubmit={handleSubmit}>
-            <div className="input-group">
-              <TextField
-                fullWidth
-                placeholder="הכנס קישור ל-YouTube"
-                variant="outlined"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                required
-                sx={{ 
-                  mb: 2,
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 1,
-                  }
-                }}
-              />
-              
-              <Select
-                value={summaryType}
-                onChange={(e) => setSummaryType(e.target.value)}
-                sx={{
-                  '& .MuiSelect-select': {
-                    padding: '10px 14px',
-                  },
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(0, 0, 0, 0.23)',
-                  },
-                }}
-              >
-                {summaryOptions.map(option => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </div>
-
-            <Button
-              type="submit"
-              variant="contained"
+    <Box sx={{
+      minHeight: '100vh',
+      width: '100vw',
+      background: '#f9f9f9',
+      margin: 0,
+      padding: 0,
+      boxSizing: 'border-box',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+    }}>
+      <Typography
+        variant="h4"
+        component="h1"
+        gutterBottom
+        align="center"
+        sx={{ mt: 6, mb: 4, fontWeight: 'normal' }}
+      >
+        סכם סרטון YouTube
+      </Typography>
+      <Paper
+        elevation={1}
+        sx={{
+          p: 4,
+          borderRadius: 2,
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          width: '95vw',
+          maxWidth: '600px',
+          mb: 4,
+        }}
+      >
+        <Box component="form" onSubmit={handleSubmit}>
+          <div className="input-group">
+            <TextField
               fullWidth
-              disabled={loading}
-              sx={{ 
-                py: 1.5,
-                bgcolor: '#1976d2',
-                borderRadius: 1,
-                textTransform: 'uppercase',
-                fontWeight: 'normal'
+              placeholder="הכנס קישור ל-YouTube"
+              variant="outlined"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              required
+              sx={{
+                mb: 2,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 1,
+                }
+              }}
+            />
+            <Select
+              value={summaryType}
+              onChange={(e) => setSummaryType(e.target.value)}
+              sx={{
+                mb: 2,
+                '& .MuiSelect-select': {
+                  padding: '10px 14px',
+                },
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: 'rgba(0, 0, 0, 0.23)',
+                },
               }}
             >
-              {loading ? 'מעבד...' : 'סכם סרטון'}
-            </Button>
-          </Box>
-
-          {error && <div className="error">{error}</div>}
-          {summary && (
-            <div className="summary-result">
-              <h3>הסיכום שלך:</h3>
-              <div className="summary-content">{summary}</div>
-            </div>
-          )}
-        </Paper>
-      </Container>
+              {summaryOptions.map(option => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </div>
+          <Button
+            type="submit"
+            variant="contained"
+            fullWidth
+            disabled={loading}
+            sx={{
+              py: 1.5,
+              bgcolor: '#1976d2',
+              borderRadius: 1,
+              textTransform: 'uppercase',
+              fontWeight: 'normal'
+            }}
+          >
+            {loading ? 'מעבד...' : 'סכם סרטון'}
+          </Button>
+        </Box>
+        {error && <div className="error">{error}</div>}
+        {summary && (
+          <div className="summary-result">
+            <h3>הסיכום שלך:</h3>
+            <div className="summary-content">{summary}</div>
+          </div>
+        )}
+      </Paper>
     </Box>
   );
 };
