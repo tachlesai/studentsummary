@@ -16,7 +16,8 @@ const AudioRecorder = () => {
   const [recordingLevel, setRecordingLevel] = useState(0);
   const [summaryOptions, setSummaryOptions] = useState({
     style: 'detailed',
-    language: 'he'
+    language: 'he',
+    outputType: 'summary'
   });
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -207,50 +208,57 @@ const AudioRecorder = () => {
       setIsTranscribing(true);
       
       // Log file size for debugging
-      console.log('Original audio size:', Math.round(audioBlob.size / 1024 / 1024), 'MB');
+      console.log(`File size: ${audioBlob.size / 1024 / 1024} MB`);
       
-      // Process audio without size restrictions
+      // Check file size
+      if (audioBlob.size > 200 * 1024 * 1024) { // 200MB
+        setIsTranscribing(false);
+        setError('File size is too large. Please record a shorter audio.');
+        return;
+      }
+      
+      // Convert blob to base64
       const reader = new FileReader();
       reader.readAsDataURL(audioBlob);
       
-      reader.onloadend = async () => {
+      reader.onload = async () => {
+        const base64Audio = reader.result;
+        
         try {
-          setError('');
-          // Get token if available
+          // Send to server for processing
           const token = localStorage.getItem('token');
-
-          // Show processing message for large files
-          if (audioBlob.size > 1024 * 1024 * 10) { // If larger than 10MB
-            setError('הקלטה גדולה, העיבוד עשוי להימשך זמן רב... אנא המתן');
-          }
-          
-          // Use the direct endpoint with base64 data
-          const response = await axios.post('/api/process-recording', 
-            { audioData: reader.result, options: summaryOptions },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': token ? `Bearer ${token}` : undefined
-              },
-              // Set a longer timeout for large files (5 minutes)
-              timeout: 300000
+          const response = await axios.post(`${API_BASE_URL}/api/process-recording`, {
+            audioData: base64Audio,
+            options: {
+              style: summaryOptions.style,
+              language: summaryOptions.language,
+              outputType: summaryOptions.outputType
             }
-          );
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': token ? `Bearer ${token}` : undefined
+            },
+            timeout: 300000 // 5-minute timeout
+          });
           
-          if (response.data.success) {
-            setTranscription(response.data.transcription);
-            setSummary(response.data.summary);
-            setError(''); // Clear any processing messages
+          if (response.data && response.data.content) {
+            // Handle successful response
+            if (summaryOptions.outputType === 'transcript') {
+              setTranscription(response.data.content);
+              setSummary(''); // Clear summary if transcript was requested
+            } else {
+              setSummary(response.data.content);
+              setTranscription(response.data.transcription || ''); // Set transcription if available
+            }
             
-            // Format summary data to match file upload format
+            // Create a structure similar to the file upload response
             const summaryData = {
-              summary: typeof response.data.summary === 'object' 
-                ? response.data.summary.content 
-                : response.data.summary,
-              pdfPath: response.data.summary.pdf_path,
-              title: response.data.summary.title || 'Audio Recording',
-              created_at: response.data.summary.created_at || new Date().toISOString(),
-              file_name: response.data.summary.file_name || `recording_${Date.now()}.webm`
+              summary: response.data.content,
+              pdfPath: response.data.pdf_path,
+              title: response.data.title || 'Audio Recording',
+              created_at: response.data.created_at || new Date().toISOString(),
+              file_name: response.data.file_name || `recording_${Date.now()}.webm`
             };
             
             // Save to localStorage for persistence, exactly like file upload
@@ -472,7 +480,7 @@ const AudioRecorder = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                     </svg>
-                    <span>תמלל והכן סיכום</span>
+                    <span>{summaryOptions.outputType === 'transcript' ? 'תמלל הקלטה' : 'תמלל והכן סיכום'}</span>
                   </>
                 )}
               </motion.button>
@@ -535,6 +543,30 @@ const AudioRecorder = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1 font-sans">סוג פלט</label>
+              <div className="group relative">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-white p-3 rounded-lg shadow-lg border border-gray-200 hidden group-hover:block z-50">
+                  <p className="text-sm text-gray-600">בחר האם ברצונך לקבל סיכום מלא או רק תמלול של הקובץ ללא סיכום.</p>
+                </div>
+              </div>
+            </div>
+            <select
+              name="outputType"
+              value={summaryOptions.outputType}
+              onChange={handleOptionChange}
+              className="w-full p-3 border border-gray-300 rounded-md font-sans shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              dir="rtl"
+            >
+              <option value="summary">סיכום</option>
+              <option value="transcript">תמלול בלבד</option>
+            </select>
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
               <label className="block text-sm font-medium text-gray-700 mb-1 font-sans">סגנון</label>
               <div className="group relative">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -555,6 +587,7 @@ const AudioRecorder = () => {
               onChange={handleOptionChange}
               className="w-full p-3 border border-gray-300 rounded-md font-sans shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               dir="rtl"
+              disabled={summaryOptions.outputType === 'transcript'}
             >
               <option value="concise">תמציתי (נקודות)</option>
               <option value="detailed">מפורט מאוד</option>

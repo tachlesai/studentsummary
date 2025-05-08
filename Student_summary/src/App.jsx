@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -17,6 +18,7 @@ function App() {
     <GoogleOAuthProvider clientId="223517881477-ncfrafhp355dj8c3rc99a124jrgnf4f1.apps.googleusercontent.com">
       <BrowserRouter>
         <div className="min-h-screen bg-white">
+          <Toaster position="top-center" reverseOrder={false} />
           <Navbar />
           <div className="pt-16">
             <Routes>

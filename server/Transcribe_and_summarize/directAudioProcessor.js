@@ -532,7 +532,6 @@ export async function processAudio(filePath, options = {}) {
 
 // Export functions
 export {
-  processAudio,
   transcribeWithGemini,
   summarizeWithGemini,
   cleanupAllFiles

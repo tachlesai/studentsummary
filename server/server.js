@@ -549,7 +549,7 @@ app.get('/api/usage-status', async (req, res) => {
     
     const limit = 10;
     const isLimitReached = usageCount >= limit;
-    
+
     res.json({
       success: true,
       usageData: {
