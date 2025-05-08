@@ -479,6 +479,11 @@ async function callGeminiWithRetry(fn, ...args) {
 export async function processAudio(filePath, options = {}) {
   console.log(`[DirectProcessor] Starting direct audio processing: ${filePath}`);
   console.log(`[DirectProcessor] Options:`, options);
+  
+  // Log the summary style if provided
+  if (options.style) {
+    console.log(`[DirectProcessor] Summary style: ${options.style}`);
+  }
 
   const filesToCleanup = []; // Track all files created during processing
   let wavFile = null;
@@ -500,7 +505,8 @@ export async function processAudio(filePath, options = {}) {
       return {
         success: true,
         transcript,
-        summary: null // No summarization needed
+        summary: null, // No summarization needed
+        style: options.style // Include the style in the response
       };
     }
 
@@ -513,7 +519,8 @@ export async function processAudio(filePath, options = {}) {
     return {
       success: true,
       summary,
-      transcript: null // No transcription needed
+      transcript: null, // No transcription needed
+      style: options.style // Include the style in the response
     };
   } catch (error) {
     console.error(`[DirectProcessor] Error processing audio:`, error);
@@ -525,7 +532,8 @@ export async function processAudio(filePath, options = {}) {
     
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      style: options.style // Include the style even in error case
     };
   }
 }

@@ -232,15 +232,39 @@ const StudentDashboard = () => {
       }
       
       const data = await response.json();
-      setResult(data);
+      
+      // Log the summary style that was used
+      console.log(`Summary style used: ${summaryOptions.style}`);
+      
       // Determine if we need to store summary or transcript
       const contentToStore = summaryOptions.outputType === 'transcript' ? data.transcription : data.content;
-      setProcessedSummary(contentToStore);
-      setProcessedPdfPath(data.pdfPath);
-      fetchSummaries();
-      fetchUsageStatus(); // Refresh usage data
       
+      // Save the summary data to localStorage for potential later use
+      localStorage.setItem('lastProcessedSummary', JSON.stringify({
+        summary: contentToStore,
+        pdfPath: data.pdfPath,
+        title: data.title,
+        created_at: new Date().toISOString(),
+        style: summaryOptions.style
+      }));
+      
+      // Refresh data in the background
+      fetchSummaries();
+      fetchUsageStatus();
+      
+      // Show success message
       toast.success('הקובץ עובד בהצלחה!');
+      
+      // Redirect to summary page
+      navigate('/summary-result', {
+        state: {
+          summary: contentToStore,
+          pdfPath: data.pdfPath,
+          title: data.title,
+          created_at: new Date().toISOString(),
+          style: summaryOptions.style
+        }
+      });
     } catch (error) {
       console.error('Error processing file:', error);
       toast.error(error.message || 'שגיאה בעיבוד הקובץ, אנא נסה שוב');

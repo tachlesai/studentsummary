@@ -128,11 +128,24 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
     const filename = path.basename(req.file.originalname);
     const title = path.parse(filename).name;
     
+    // Parse options from request body if available
+    let parsedOptions = {};
+    if (req.body.options) {
+      try {
+        parsedOptions = JSON.parse(req.body.options);
+        console.log('Parsed options:', parsedOptions);
+      } catch (e) {
+        console.error('Error parsing options:', e);
+      }
+    }
+    
     // Get processing options from request
     const options = {
-      onlyTranscribe: req.body.outputType === 'transcript',
+      onlyTranscribe: parsedOptions.outputType === 'transcript',
       skipTranscription: false,
-      skipSummarization: req.body.outputType === 'transcript'
+      skipSummarization: parsedOptions.outputType === 'transcript',
+      style: parsedOptions.style || 'detailed', // Include the summary style
+      language: parsedOptions.language || 'he'
     };
     
     console.log('Processing options:', options);
@@ -147,9 +160,10 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
     // Prepare response data based on output type
     const responseData = {
       title: title,
-      content: req.body.outputType === 'transcript' ? result.transcript : result.summary,
+      content: parsedOptions.outputType === 'transcript' ? result.transcript : result.summary,
       transcription: result.transcript,
-      pdfPath: null // PDF generation will be handled separately if needed
+      pdfPath: null, // PDF generation will be handled separately if needed
+      style: result.style || options.style // Include the summary style in the response
     };
 
     // Save to database if we have content
@@ -211,6 +225,17 @@ app.post('/api/process-recording', async (req, res) => {
     // Get base64 data from request
     const audioDataString = req.body.audioData;
     console.log(`Audio data received: ${Math.round(audioDataString.length / 1024 / 1024)}MB`);
+    
+    // Parse options if available
+    let parsedOptions = {};
+    if (req.body.options) {
+      try {
+        parsedOptions = JSON.parse(req.body.options);
+        console.log('Recording options:', parsedOptions);
+      } catch (e) {
+        console.error('Error parsing recording options:', e);
+      }
+    }
     
     // Check if the data is too large for processing
     if (audioDataString.length > 150 * 1024 * 1024) { // 150MB limit
@@ -283,7 +308,9 @@ app.post('/api/process-recording', async (req, res) => {
         result = await processAudio(tempFilePath, {
           onlyTranscribe: false, // We want a summary
           skipTranscription: false,
-          skipSummarization: false
+          skipSummarization: false,
+          style: parsedOptions.style || 'detailed', // Include the summary style
+          language: parsedOptions.language || 'he'
         });
         console.log('Audio processing completed successfully');
         
@@ -327,7 +354,8 @@ app.post('/api/process-recording', async (req, res) => {
             title: 'Audio Recording',
             created_at: new Date().toISOString(),
             pdf_path: null,
-            file_name: fileName
+            file_name: fileName,
+            style: result.style || parsedOptions.style || 'detailed' // Include the style
           },
           transcription: result.transcript
         });

@@ -117,10 +117,20 @@ const AudioRecorder = () => {
         // Get token
         const token = localStorage.getItem('token');
         
+        // Default style for summary
+        const style = 'detailed';
+        
         // Make a simple POST request with the audio data
         const response = await axios.post(
           `${API_BASE_URL}/api/process-recording`, 
-          { audioData: reader.result },
+          { 
+            audioData: reader.result,
+            options: JSON.stringify({
+              style: style,
+              language: 'he',
+              outputType: 'summary'
+            })
+          },
           { 
             headers: { 
               'Content-Type': 'application/json',
@@ -130,21 +140,29 @@ const AudioRecorder = () => {
         );
         
         console.log('Server response:', response.data);
+        console.log(`Summary style used: ${style}`);
         
         if (response.data.success) {
           // Save to localStorage for backup
           localStorage.setItem(
             'lastProcessedSummary', 
-            JSON.stringify(response.data.summary)
+            JSON.stringify({
+              summary: response.data.summary.content,
+              title: response.data.summary.title || 'Audio Summary',
+              created_at: response.data.summary.created_at,
+              pdfPath: response.data.summary.pdf_path,
+              style: style
+            })
           );
           
           // Navigate to results page
-          navigate('/summary', {
+          navigate('/summary-result', {
             state: {
               summary: response.data.summary.content,
               title: response.data.summary.title || 'Audio Summary',
               created_at: response.data.summary.created_at,
-              pdfPath: response.data.summary.pdf_path
+              pdfPath: response.data.summary.pdf_path,
+              style: style
             }
           });
         } else {
