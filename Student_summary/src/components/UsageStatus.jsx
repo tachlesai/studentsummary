@@ -82,7 +82,10 @@ const UsageStatus = () => {
         </div>
         
         {!isPremium && (
-          <a href="/upgrade" className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-md transition-colors">
+          <a 
+            href="/membership-payment"
+            className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-md transition-colors"
+          >
             שדרג עכשיו
           </a>
         )}

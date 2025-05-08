@@ -548,7 +548,7 @@ app.get('/api/summaries', async (req, res) => {
       file_name: row.file_name,
       user_email: row.user_email
     }));
-    
+
     res.json({
       success: true,
       summaries: summaries

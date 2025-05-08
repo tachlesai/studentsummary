@@ -1,7 +1,21 @@
 import React from 'react';
-import { isUserLoggedIn } from '../utils/auth';
+import { Check, X } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
 const Pricing = () => {
+  const navigate = useNavigate();
+  const isUserLoggedIn = !!localStorage.getItem('token');
+
+  const handleFreeTierClick = () => {
+    if (isUserLoggedIn) {
+      // If user is logged in, redirect to front page
+      navigate('/');
+    } else {
+      // If user is not logged in, redirect to signup page
+      navigate('/signup');
+    }
+  };
+
   const plans = [
     {
       name: "מנוי חינמי",
@@ -59,80 +73,110 @@ const Pricing = () => {
   ];
 
   return (
-    <section className="py-24 bg-white">
+    <section id="pricing" className="py-24 bg-gradient-to-b from-white to-indigo-50">
       <div className="max-w-7xl mx-auto px-8">
+        {/* Section Header */}
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-gray-900">
-            תכניות ומחירים
+          <span className="text-indigo-600 font-semibold text-sm uppercase tracking-wide">
+            תמחור
+          </span>
+          <h2 className="mt-4 text-4xl font-bold text-gray-900">
+            בחר את התוכנית המתאימה לך
           </h2>
           <p className="mt-4 text-xl text-gray-600 max-w-2xl mx-auto">
-            בחר את התכנית שמתאימה לך
+            מחירים פשוטים וברורים, ללא התחייבות ארוכת טווח. בחר את התוכנית המתאימה לצרכים שלך
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="p-8 rounded-2xl bg-white border border-gray-100">
-            <h3 className="text-2xl font-bold mb-4">חינם</h3>
-            <p className="text-gray-600 mb-6">התחלה מהירה</p>
-            <ul className="space-y-4 mb-8">
-              <li>5 הקלטות בחודש</li>
-              <li>סיכומים בסיסיים</li>
-              <li>תמיכה בדוא"ל</li>
-            </ul>
-            <a 
-              href={isUserLoggedIn() ? '/dashboard' : '/signup'}
-              className="inline-block w-full px-6 py-3 text-base font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-center"
-              onClick={(e) => {
-                e.preventDefault();
-                window.location.href = isUserLoggedIn() ? '/dashboard' : '/signup';
-              }}
+        {/* Pricing Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          {plans.map((plan, index) => (
+            <div 
+              key={index}
+              className={`
+                relative rounded-2xl overflow-hidden transition-all duration-300
+                ${plan.popular ? 'transform md:-translate-y-4 scale-105 shadow-xl z-10' : 'shadow-lg hover:shadow-xl'}
+                bg-white border-2 ${plan.popular ? 'border-indigo-500' : 'border-gray-100'}
+              `}
             >
-              התחל בחינם
-            </a>
-          </div>
-
-          <div className="p-8 rounded-2xl bg-white border-2 border-indigo-600">
-            <h3 className="text-2xl font-bold mb-4">מקצועי</h3>
-            <p className="text-gray-600 mb-6">₪49 לחודש</p>
-            <ul className="space-y-4 mb-8">
-              <li>הקלטות בלתי מוגבלות</li>
-              <li>סיכומים מתקדמים</li>
-              <li>תמיכה בדוא"ל וצ'אט</li>
-              <li>ייצוא PDF</li>
-            </ul>
-            <a 
-              href={isUserLoggedIn() ? '/dashboard' : '/signup'}
-              className="inline-block w-full px-6 py-3 text-base font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-center"
-              onClick={(e) => {
-                e.preventDefault();
-                window.location.href = isUserLoggedIn() ? '/dashboard' : '/signup';
-              }}
-            >
-              התחל בחינם
-            </a>
-          </div>
-
-          <div className="p-8 rounded-2xl bg-white border border-gray-100">
-            <h3 className="text-2xl font-bold mb-4">ארגוני</h3>
-            <p className="text-gray-600 mb-6">התאמה אישית</p>
-            <ul className="space-y-4 mb-8">
-              <li>הקלטות בלתי מוגבלות</li>
-              <li>סיכומים מתקדמים</li>
-              <li>תמיכה 24/7</li>
-              <li>API מותאם</li>
-              <li>שילוב עם מערכות קיימות</li>
-            </ul>
-            <a 
-              href={isUserLoggedIn() ? '/dashboard' : '/signup'}
-              className="inline-block w-full px-6 py-3 text-base font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-center"
-              onClick={(e) => {
-                e.preventDefault();
-                window.location.href = isUserLoggedIn() ? '/dashboard' : '/signup';
-              }}
-            >
-              התחל בחינם
-            </a>
-          </div>
+              {plan.popular && (
+                <div className="absolute top-0 right-0 left-0 bg-indigo-600 text-white text-center py-1 text-sm font-medium">
+                  הכי פופולרי
+                </div>
+              )}
+              
+              <div className="p-8 pt-10">
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                  {plan.name}
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  {plan.description}
+                </p>
+                
+                <div className="flex items-baseline mb-8">
+                  <span className="text-5xl font-extrabold text-gray-900">₪{plan.price}</span>
+                  <span className="mr-2 text-gray-600">/חודש</span>
+                </div>
+                
+                <ul className="space-y-4 mb-8">
+                  {plan.features.map((feature, fIndex) => (
+                    <li key={fIndex} className="flex items-start">
+                      {feature.included ? (
+                        <Check className={`w-5 h-5 ml-2 mt-0.5 text-${plan.color}-500 flex-shrink-0`} />
+                      ) : (
+                        <X className="w-5 h-5 ml-2 mt-0.5 text-red-500 flex-shrink-0" />
+                      )}
+                      <span className={`${feature.included ? 'text-gray-700' : 'text-gray-400'}`}>
+                        {feature.text}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  {index === 0 ? (
+                    <button
+                      onClick={handleFreeTierClick}
+                      style={{
+                        backgroundColor: 'gray',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '12px 20px',
+                        cursor: 'pointer',
+                        fontSize: '1rem',
+                        width: '100%',
+                        textAlign: 'center'
+                      }}
+                    >
+                      {isUserLoggedIn ? 'עבור ללוח הבקרה' : 'הירשם עכשיו'}
+                    </button>
+                  ) : (
+                    <a
+                      href={plan.ctaLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        backgroundColor: plan.color === 'indigo' ? 'indigo' : plan.color === 'purple' ? 'purple' : 'gray',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '12px 20px',
+                        cursor: 'pointer',
+                        fontSize: '1rem',
+                        textDecoration: 'none',
+                        width: '100%',
+                        textAlign: 'center',
+                        display: 'inline-block'
+                      }}
+                    >
+                      הצטרף עכשיו
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
         
         {/* FAQ or Additional Info */}

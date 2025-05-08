@@ -90,8 +90,8 @@ async function transcribeWithGemini(filePath) {
     const fileBuffer = fs.readFileSync(wavFile);
     console.log(`[DirectProcessor] Audio file size: ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB`);
     
-    // Create a model instance - using the newer Gemini 1.5 Pro model
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    // Create a model instance - using the newer Gemini 2.5 Pro model
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-exp-03-25" });
     
     // Prepare the prompt for transcription
     const prompt = `Please transcribe the following audio file. The audio is in Hebrew. 
@@ -158,81 +158,85 @@ async function summarizeWithGemini(text, options = {}) {
       throw new Error('Gemini client not initialized - API key may be missing');
     }
     
-    // Create a model instance - using the newer Gemini 1.5 Pro model
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    // Create a model instance - using the newer Gemini 2.5 Pro model
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-exp-03-25" });
     
     // Base prompt for student-friendly summarization
-    let prompt = `You are an expert educational summarizer. Create a student-friendly summary of the following Hebrew text, which is a transcription of an audio recording.
+    let prompt = `You are an expert educational summarizer. Create a student-friendly summary of the following Hebrew text, which is a transcription of an audio recording.`;
 
-    Guidelines for the summary:
-    1. Structure:
-       - Start with a clear, simple overview of the main topic
-       - Break down complex ideas into easy-to-understand points
-       - Use clear headings and subheadings
-       - End with key takeaways or study points
-    
-    2. Content:
-       - Focus on the most important concepts
-       - Explain difficult terms in simple language
-       - Include relevant examples that help understanding
-       - Highlight key definitions and formulas
-       - Add study tips or memory aids where helpful
-    
-    3. Style:
-       - Write in clear, simple Hebrew
-       - Use short paragraphs and bullet points
-       - Include "Key Points" sections
-       - Add "Remember" boxes for important information
-       - Use emojis or symbols to highlight important points (📝 for notes, 💡 for tips, ⭐ for key points)
-    
-    4. Study-Friendly Features:
-       - Add "Quick Review" sections
-       - Include "Practice Questions" where appropriate
-       - Highlight connections between different topics
-       - Add "Common Mistakes to Avoid" sections
-       - Include "Further Reading" suggestions if relevant`;
+    // Add specific instructions based on the selected style
+    switch (options.style) {
+      case 'concise':
+        prompt += `\n\nCreate a concise summary using clear and concise bullet points. Focus only on the essential concepts, definitions, examples, and key ideas. Group related points where relevant. Each bullet point should capture one core idea in one sentence. Do not add external information or personal interpretation.`;
+        break;
+      
+      case 'detailed':
+        prompt += `\n\nWrite a comprehensive and detailed summary that fully captures everything important that was said. Include explanations, definitions, processes, examples, and context, all written in clear and academic language. The goal is for a student to study from your summary as if they had attended the lecture. Structure the text logically, and maintain the same order of topics as in the original lecture.`;
+        break;
+      
+      case 'narrative':
+        prompt += `\n\nGenerate a brief narrative summary of the key ideas. Keep it to one or two well-structured paragraphs. Avoid excessive detail, and focus on delivering a readable, fluent overview of the main arguments, themes, or ideas. Use full sentences – do not use bullet points.`;
+        break;
+      
+      case 'thematic':
+        prompt += `\n\nSummarize the content by dividing it into thematic sections or topic-based headers. Under each section, write a concise summary of the relevant material. Focus on clarity and structure. Ensure that all major areas covered in the lecture are represented. This is helpful for students who want to focus on specific parts of the lecture later.`;
+        break;
+      
+      case 'qa':
+        prompt += `\n\nExtract important information and convert it into a Q&A format suitable for student practice and revision. Each question should address a major topic or key concept mentioned in the lecture. Provide clear and direct answers based strictly on the content of the lecture. Do not invent or assume additional information. Aim for around 5–15 question-answer pairs, depending on the amount of material covered.`;
+        break;
+      
+      case 'glossary':
+        prompt += `\n\nExtract a list of important terms and their definitions as presented or implied by the speaker. Only include terms that were explicitly mentioned or explained. For each term, provide a short and clear definition that reflects the context of the lecture. Format as a glossary-style list.`;
+        break;
+      
+      case 'steps':
+        prompt += `\n\nIdentify any processes, methods, workflows, or step-based explanations. Summarize them clearly as a numbered list of steps, maintaining the logical sequence as presented in the lecture. This summary should help a student understand the "how" or "in what order" of the discussed content.`;
+        break;
+      
+      case 'tldr':
+        prompt += `\n\nWrite a one-sentence summary that captures the core purpose or insight of the lecture in the simplest and clearest way possible. This should help a student quickly understand what the lecture was mainly about.`;
+        break;
+      
+      default:
+        prompt += `\n\nCreate a balanced summary that captures the main points while maintaining readability and clarity.`;
+    }
 
-    // Add specific instructions based on options
-    if (options.includeDefinitions) {
-      prompt += `\n\nSpecial Focus: Include clear definitions and explanations of all technical terms.`;
+    // Add language preference
+    switch (options.language) {
+      case 'en':
+        prompt += `\n\nPlease provide the summary in English.`;
+        break;
+      case 'he':
+        prompt += `\n\nPlease provide the summary in Hebrew.`;
+        break;
+      case 'ar':
+        prompt += `\n\nPlease provide the summary in Arabic.`;
+        break;
+      case 'fr':
+        prompt += `\n\nPlease provide the summary in French.`;
+        break;
+      case 'ru':
+        prompt += `\n\nPlease provide the summary in Russian.`;
+        break;
+      default:
+        prompt += `\n\nPlease provide the summary in Hebrew.`;
+        break;
     }
-    
-    if (options.includeExamples) {
-      prompt += `\n\nSpecial Focus: Provide multiple real-world examples for each concept.`;
-    }
-    
-    if (options.includePracticeQuestions) {
-      prompt += `\n\nSpecial Focus: Add practice questions at the end of each section.`;
-    }
-    
-    if (options.includeKeyPoints) {
-      prompt += `\n\nSpecial Focus: Highlight key points with bullet points and emojis.`;
-    }
-    
-    if (options.includeTimeline) {
-      prompt += `\n\nSpecial Focus: Organize information chronologically where possible.`;
-    }
-    
-    if (options.includeDiagrams) {
-      prompt += `\n\nSpecial Focus: Describe how to visualize concepts using simple diagrams.`;
-    }
-    
-    if (options.includeComparisons) {
-      prompt += `\n\nSpecial Focus: Compare and contrast related concepts.`;
-    }
-    
-    // Add the text to summarize
-    prompt += `\n\nText to summarize:\n${text}`;
-    
-    // Generate summary
+
+    // Add the text to be summarized
+    prompt += `\n\nHere is the text to summarize:\n${text}`;
+
+    console.log(`[DirectProcessor] Sending request to Gemini API...`);
     const result = await model.generateContent(prompt);
-    const summary = result.response.text();
+    console.log(`[DirectProcessor] Received response from Gemini API`);
     
+    const summary = result.response.text();
     console.log(`[DirectProcessor] Summary generated: ${summary.length} characters`);
     
     return summary;
   } catch (error) {
-    console.error(`[DirectProcessor] Summarization error:`, error);
+    console.error(`[DirectProcessor] Error in summarization:`, error);
     throw error;
   }
 }
@@ -260,8 +264,8 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     const fileBuffer = fs.readFileSync(wavFile);
     console.log(`[DirectProcessor] Audio file size: ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB`);
     
-    // Create a model instance - using the newer Gemini 1.5 Pro model
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+    // Create a model instance - using the newer Gemini 2.5 Pro model
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-exp-03-25" });
     
     // Prepare the prompt for summarization with student-friendly formatting
     const prompt = `You are an expert educational summarizer. Create a student-friendly summary of the following Hebrew audio recording.
@@ -413,116 +417,36 @@ async function callGeminiWithRetry(fn, ...args) {
 export async function processAudio(filePath, options = {}) {
   console.log(`[DirectProcessor] Starting direct audio processing: ${filePath}`);
   console.log(`[DirectProcessor] Options:`, options);
-  
-  let transcript = null;
-  let summary = null;
-  let error = null;
-  
+
   try {
     // Step 1: Check if file exists
     if (!fs.existsSync(filePath)) {
       throw new Error(`File does not exist: ${filePath}`);
     }
-    
-    // Step 2: Split if needed
-    const chunkFiles = await splitAudioIfNeeded(filePath);
-    let allTranscripts = [];
-    let allSummaries = [];
-    for (const chunk of chunkFiles) {
-      const fileStats = fs.statSync(chunk);
-      console.log(`[DirectProcessor] Processing chunk: ${chunk} (${(fileStats.size / 1024 / 1024).toFixed(2)}MB)`);
-      await sleep(2000); // 2 second delay between requests
-      if (options.onlyTranscribe) {
-        const chunkTranscript = await callGeminiWithRetry(transcribeWithGemini, chunk);
-        const chunkTokens = encode(chunkTranscript).length;
-        console.log(`[DirectProcessor] Chunk transcript token count: ${chunkTokens}`);
-        allTranscripts.push(chunkTranscript);
-      } else {
-        // Always transcribe first for summary
-        const chunkTranscript = await callGeminiWithRetry(transcribeWithGemini, chunk);
-        const chunkTokens = encode(chunkTranscript).length;
-        console.log(`[DirectProcessor] Chunk transcript token count: ${chunkTokens}`);
-        allTranscripts.push(chunkTranscript);
-      }
-    }
+
+    // Step 2: Check if only transcription is requested
     if (options.onlyTranscribe) {
-      transcript = allTranscripts.join('\n---\n');
+      const transcript = await transcribeWithGemini(filePath);
       return {
         success: true,
         transcript,
-        summary: null
-      };
-    } else {
-      // Count tokens in the full transcript
-      transcript = allTranscripts.join('\n');
-      const tokenCount = encode(transcript).length;
-      console.log(`[DirectProcessor] Transcript token count: ${tokenCount}`);
-      if (tokenCount > 120000) {
-        // Too long for Gemini, use summary of summaries
-        console.log('[DirectProcessor] Transcript too long, using summary of summaries approach');
-        // Summarize each chunk transcript
-        for (const chunkTranscript of allTranscripts) {
-          await sleep(2000);
-          const chunkSummary = await callGeminiWithRetry(async (text) => {
-            // Use Gemini to summarize text
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-            const prompt = `סכם את הטקסט הבא בעברית ברמה ידידותית לסטודנט, כולל כותרות, דגשים, וטיפים ללמידה:\n\n${text}`;
-            const result = await model.generateContent([prompt]);
-            return result.response.text();
-          }, chunkTranscript);
-          const summaryTokens = encode(chunkSummary).length;
-          console.log(`[DirectProcessor] Chunk summary token count: ${summaryTokens}`);
-          allSummaries.push(chunkSummary);
-        }
-        // Now summarize all summaries together
-        const summariesText = allSummaries.join('\n');
-        const summariesTokens = encode(summariesText).length;
-        console.log(`[DirectProcessor] All summaries token count: ${summariesTokens}`);
-        const finalSummary = await callGeminiWithRetry(async (text) => {
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-          const prompt = `סכם את כל הסיכומים הבאים לסיכום אחד ברור, לא חזרתי, ומסודר:\n\n${text}`;
-          const result = await model.generateContent([prompt]);
-          return result.response.text();
-        }, summariesText);
-        const finalSummaryTokens = encode(finalSummary).length;
-        console.log(`[DirectProcessor] Final summary token count: ${finalSummaryTokens}`);
-        summary = finalSummary;
-      } else {
-        // Full transcript is within token limit, summarize as one
-        console.log(`[DirectProcessor] Sending full transcript to Gemini for summary. Token count: ${tokenCount}`);
-        summary = await callGeminiWithRetry(async (text) => {
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-          const prompt = `סכם את הטקסט הבא בעברית ברמה ידידותית לסטודנט, כולל כותרות, דגשים, וטיפים ללמידה:\n\n${text}`;
-          const result = await model.generateContent([prompt]);
-          return result.response.text();
-        }, transcript);
-        const summaryTokens = encode(summary).length;
-        console.log(`[DirectProcessor] Full summary token count: ${summaryTokens}`);
-      }
-      return {
-        success: true,
-        transcript,
-        summary
+        summary: null // No summarization needed
       };
     }
-  } catch (processError) {
-    console.error(`[DirectProcessor] Processing error:`, processError);
-    error = processError.message;
-    
-    // Log additional error details
-    if (processError.response) {
-      console.error(`[DirectProcessor] Error response details:`, {
-        status: processError.response.status,
-        statusText: processError.response.statusText,
-        data: processError.response.data
-      });
-    }
-    
+
+    // Step 3: Directly summarize the audio file
+    const summary = await summarizeAudioWithGemini(filePath, options);
+
+    return {
+      success: true,
+      summary,
+      transcript: null // No transcription needed
+    };
+  } catch (error) {
+    console.error(`[DirectProcessor] Error processing audio:`, error);
     return {
       success: false,
-      error,
-      transcript,
-      summary
+      error: error.message
     };
   }
 }
