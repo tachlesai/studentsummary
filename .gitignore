@@ -3,3 +3,11 @@ node_modules
 server/uploads/
 server/temp/
 .env
+server/temp/*
+   server/uploads/*
+   *.wav
+   *.mp3
+   *.mp4
+   *.ogg
+   *.webm
+   *.m4a
