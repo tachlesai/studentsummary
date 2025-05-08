@@ -1,15 +1,6 @@
-cat > files-to-remove.txt << 'EOL'
-segment_000.wav
-segment_001.wav
-segment_002.wav
-segment_003.wav
-segment_004.wav
-segment_005.wav
-segment_006.wav
-segment_007.wav
-segment_008.wav
-segment_009.wav
-segment_010.wav
-audio.wav
-audio.mp3
-EOL
+   cat > paths-to-remove.txt << 'EOL'
+   server/Transcribe_and_summarize/temp_segments/segment_000.wav
+   server/Transcribe_and_summarize/temp_segments/segment_008.wav
+   server/Transcribe_and_summarize/temp_segments/segment_010.wav
+   server/Transcribe_and_summarize/temp/audio.mp3
+   EOL
