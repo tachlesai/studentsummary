@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { processAudio } from './Transcribe_and_summarize/directAudioProcessor.js';
+import { processAudio, cleanupAllFiles } from './Transcribe_and_summarize/directAudioProcessor.js';
 import db from './db.js';
 import bcrypt from 'bcryptjs';
 
@@ -172,23 +172,27 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
       }
     }
 
-    // Clean up the uploaded file
-    try {
-      fs.unlinkSync(req.file.path);
-      console.log('Cleaned up uploaded file');
-    } catch (cleanupError) {
-      console.error('Error cleaning up file:', cleanupError);
-    }
+    // Use the comprehensive cleanup function to clean up the uploaded file
+    // This will also clean up any temporary files older than 1 hour
+    await cleanupAllFiles([req.file.path], { cleanDebugFiles: true });
 
     res.json(responseData);
   } catch (error) {
     console.error('Error processing audio:', error);
+    
+    // Still try to clean up even if there was an error
+    if (req.file && req.file.path) {
+      await cleanupAllFiles([req.file.path], { cleanDebugFiles: true });
+    }
+    
     res.status(500).json({ error: error.message });
   }
 });
 
 // Process recording endpoint - for direct audio recordings
 app.post('/api/process-recording', async (req, res) => {
+  let tempFilePath = null;
+  
   try {
     console.log('Received direct audio processing request');
     
@@ -234,7 +238,7 @@ app.post('/api/process-recording', async (req, res) => {
     
     // Create a temporary file path with timestamp
     const timestamp = Date.now();
-    const tempFilePath = path.join(tempDir, `recording_${timestamp}.${fileExt}`);
+    tempFilePath = path.join(tempDir, `recording_${timestamp}.${fileExt}`);
     const fileName = `recording_${timestamp}.${fileExt}`;
     
     try {
@@ -282,13 +286,8 @@ app.post('/api/process-recording', async (req, res) => {
           throw new Error(result.error || 'Failed to process audio');
         }
         
-        // Clean up the temp file
-        try {
-          fs.unlinkSync(tempFilePath);
-          console.log('Cleaned up temp file');
-        } catch (cleanupError) {
-          console.error('Error cleaning up temp file:', cleanupError);
-        }
+        // Clean up the temp file and any other temporary files
+        await cleanupAllFiles([tempFilePath], { cleanDebugFiles: true });
         
         // Save to database if we have content
         if (result.summary) {
@@ -331,12 +330,8 @@ app.post('/api/process-recording', async (req, res) => {
       } catch (procError) {
         console.error('Error processing audio:', procError);
         
-        try {
-          // Clean up the temp file in case of error
-          fs.unlinkSync(tempFilePath);
-        } catch (cleanupError) {
-          console.error('Failed to delete temp file:', cleanupError);
-        }
+        // Clean up any temporary files
+        await cleanupAllFiles([tempFilePath], { cleanDebugFiles: true });
         
         return res.status(500).json({
           success: false,
@@ -345,6 +340,12 @@ app.post('/api/process-recording', async (req, res) => {
       }
     } catch (error) {
       console.error('Error handling audio file:', error);
+      
+      // Clean up any temporary files
+      if (tempFilePath) {
+        await cleanupAllFiles([tempFilePath], { cleanDebugFiles: true });
+      }
+      
       res.status(500).json({
         success: false,
         error: 'Error processing audio file'
@@ -352,12 +353,77 @@ app.post('/api/process-recording', async (req, res) => {
     }
   } catch (error) {
     console.error('Error in direct audio processing:', error);
+    
+    // Clean up any temporary files
+    if (tempFilePath) {
+      await cleanupAllFiles([tempFilePath], { cleanDebugFiles: true });
+    }
+    
     res.status(500).json({
       success: false,
       error: 'Server error processing audio'
     });
   }
 });
+
+// Add a periodic cleanup job to remove old temporary files
+const CLEANUP_INTERVAL = 60 * 60 * 1000; // Run cleanup every hour
+
+async function cleanupOldTempFiles() {
+  console.log('Running scheduled cleanup of temporary files...');
+  
+  const tempDir = path.join(__dirname, 'temp');
+  const uploadsDir = path.join(__dirname, 'uploads');
+  const MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+  const now = Date.now();
+  
+  // Clean up temp directory
+  try {
+    if (fs.existsSync(tempDir)) {
+      const tempFiles = fs.readdirSync(tempDir)
+        .map(file => path.join(tempDir, file))
+        .filter(file => {
+          try {
+            const stats = fs.statSync(file);
+            return now - stats.mtimeMs > MAX_AGE;
+          } catch (err) {
+            return false;
+          }
+        });
+      
+      console.log(`Found ${tempFiles.length} old files in temp directory`);
+      await cleanupAllFiles(tempFiles);
+    }
+  } catch (error) {
+    console.error('Error cleaning temp directory:', error);
+  }
+  
+  // Clean up uploads directory
+  try {
+    if (fs.existsSync(uploadsDir)) {
+      const uploadFiles = fs.readdirSync(uploadsDir)
+        .map(file => path.join(uploadsDir, file))
+        .filter(file => {
+          try {
+            const stats = fs.statSync(file);
+            return now - stats.mtimeMs > MAX_AGE;
+          } catch (err) {
+            return false;
+          }
+        });
+      
+      console.log(`Found ${uploadFiles.length} old files in uploads directory`);
+      await cleanupAllFiles(uploadFiles);
+    }
+  } catch (error) {
+    console.error('Error cleaning uploads directory:', error);
+  }
+}
+
+// Start the periodic cleanup
+setInterval(cleanupOldTempFiles, CLEANUP_INTERVAL);
+// Also run it once when the server starts
+cleanupOldTempFiles();
 
 // Login endpoint
 app.post('/api/login', async (req, res) => {

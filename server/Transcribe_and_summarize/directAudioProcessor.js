@@ -347,7 +347,7 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
 /**
  * Split audio file into 30-minute chunks using ffmpeg
  * @param {string} filePath - Path to the audio file
- * @returns {Promise<string[]>} - Array of chunk file paths
+ * @returns {Promise<Object>} - Object containing chunk file paths and original path
  */
 async function splitAudioIfNeeded(filePath) {
   const stats = fs.statSync(filePath);
@@ -360,7 +360,11 @@ async function splitAudioIfNeeded(filePath) {
 
   // If file is under 100MB and under 30 minutes, no need to split
   if (fileSizeMB <= 100 && duration <= 30 * 60) {
-    return [filePath];
+    return {
+      chunks: [filePath],
+      originalPath: filePath,
+      isOriginalReturned: true
+    };
   }
 
   // Split into 30-minute chunks
@@ -375,7 +379,65 @@ async function splitAudioIfNeeded(filePath) {
     .filter(f => f.startsWith(baseName + '_chunk_') && f.endsWith(path.extname(filePath)))
     .map(f => path.join(outputDir, f));
 
-  return chunkFiles;
+  return {
+    chunks: chunkFiles,
+    originalPath: filePath,
+    isOriginalReturned: false
+  };
+}
+
+/**
+ * Comprehensive cleanup of all temporary files
+ * @param {Array<string>} filePaths - Array of file paths to clean up
+ * @param {Object} options - Options for cleanup
+ */
+async function cleanupAllFiles(filePaths = [], options = {}) {
+  console.log(`[DirectProcessor] Cleaning up ${filePaths.length} temporary files...`);
+  
+  const errors = [];
+  for (const filePath of filePaths) {
+    if (!filePath || typeof filePath !== 'string') continue;
+    
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log(`[DirectProcessor] Cleaned up: ${filePath}`);
+      }
+    } catch (error) {
+      console.error(`[DirectProcessor] Failed to clean up file ${filePath}:`, error.message);
+      errors.push({ file: filePath, error: error.message });
+    }
+  }
+  
+  // Additionally, clean up debug transcript files
+  if (options.cleanDebugFiles) {
+    const tempDir = path.join(__dirname, '..', 'temp');
+    try {
+      if (fs.existsSync(tempDir)) {
+        const now = Date.now();
+        const debugFiles = fs.readdirSync(tempDir)
+          .filter(f => f.startsWith('direct_transcript_') && f.endsWith('.txt'))
+          .map(f => path.join(tempDir, f));
+        
+        for (const debugFile of debugFiles) {
+          try {
+            const stats = fs.statSync(debugFile);
+            // Only delete debug files older than 1 hour
+            if (now - stats.mtimeMs > 60 * 60 * 1000) {
+              fs.unlinkSync(debugFile);
+              console.log(`[DirectProcessor] Cleaned up debug file: ${debugFile}`);
+            }
+          } catch (error) {
+            console.error(`[DirectProcessor] Failed to clean up debug file ${debugFile}:`, error.message);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`[DirectProcessor] Error cleaning debug files:`, error.message);
+    }
+  }
+  
+  return { success: errors.length === 0, errors };
 }
 
 // Helper: sleep for ms milliseconds
@@ -418,6 +480,9 @@ export async function processAudio(filePath, options = {}) {
   console.log(`[DirectProcessor] Starting direct audio processing: ${filePath}`);
   console.log(`[DirectProcessor] Options:`, options);
 
+  const filesToCleanup = []; // Track all files created during processing
+  let wavFile = null;
+  
   try {
     // Step 1: Check if file exists
     if (!fs.existsSync(filePath)) {
@@ -427,6 +492,11 @@ export async function processAudio(filePath, options = {}) {
     // Step 2: Check if only transcription is requested
     if (options.onlyTranscribe) {
       const transcript = await transcribeWithGemini(filePath);
+      
+      // The transcribeWithGemini function already cleans up its WAV file
+      // We can also clean up any debug files
+      await cleanupAllFiles([], { cleanDebugFiles: true });
+      
       return {
         success: true,
         transcript,
@@ -436,6 +506,9 @@ export async function processAudio(filePath, options = {}) {
 
     // Step 3: Directly summarize the audio file
     const summary = await summarizeAudioWithGemini(filePath, options);
+    
+    // Clean up any debug files
+    await cleanupAllFiles([], { cleanDebugFiles: true });
 
     return {
       success: true,
@@ -444,6 +517,12 @@ export async function processAudio(filePath, options = {}) {
     };
   } catch (error) {
     console.error(`[DirectProcessor] Error processing audio:`, error);
+    
+    // Attempt to clean up any files that might have been created
+    if (filesToCleanup.length > 0) {
+      await cleanupAllFiles(filesToCleanup, { cleanDebugFiles: true });
+    }
+    
     return {
       success: false,
       error: error.message
@@ -452,8 +531,16 @@ export async function processAudio(filePath, options = {}) {
 }
 
 // Export functions
+export {
+  processAudio,
+  transcribeWithGemini,
+  summarizeWithGemini,
+  cleanupAllFiles
+};
+
 export default {
   processAudio,
   transcribeWithGemini,
-  summarizeWithGemini
+  summarizeWithGemini,
+  cleanupAllFiles
 }; 
