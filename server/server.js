@@ -818,7 +818,32 @@ app.get('/api/account-details', async (req, res) => {
   }
 });
 
-// Start the server
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+// Health check endpoint for Render
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'Server is running' });
 });
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  const staticFilesPath = path.join(__dirname, '../Student_summary/dist');
+  console.log(`Serving static files from: ${staticFilesPath}`);
+  
+  // Serve static files
+  app.use(express.static(staticFilesPath));
+  
+  // For any other route, serve the index.html
+  app.get('*', (req, res) => {
+    // Skip API routes
+    if (req.path.startsWith('/api')) return;
+    res.sendFile(path.join(staticFilesPath, 'index.html'));
+  });
+}
+
+// Start the server
+const server = app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});
+
+// Schedule cleanup job to run every hour - this will clean up any temporary files
+// that may have been left behind
+const cleanupJob = setInterval(cleanupOldTempFiles, 60 * 60 * 1000); // 1 hour

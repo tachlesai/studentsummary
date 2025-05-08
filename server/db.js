@@ -8,12 +8,18 @@ const { Pool } = pg;
 
 let dbConfig;
 
+// Check if we're in production mode
+const isProduction = process.env.NODE_ENV === 'production';
+console.log(`Running in ${isProduction ? 'production' : 'development'} mode`);
+
 // First try to use DATABASE_URL if it exists (common in production deployments)
 if (process.env.DATABASE_URL) {
   console.log('Using DATABASE_URL for connection');
   dbConfig = {
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    ssl: isProduction && process.env.DATABASE_URL.includes('render.com') 
+      ? { rejectUnauthorized: false } 
+      : false
   };
 } else {
   // Otherwise use individual environment variables
@@ -24,7 +30,9 @@ if (process.env.DATABASE_URL) {
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 5432,
     database: process.env.DB_NAME || 'studentsummary',
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    ssl: isProduction && process.env.SSL_ENABLED === 'true' 
+      ? { rejectUnauthorized: false } 
+      : false
   };
 }
 
@@ -50,6 +58,10 @@ pool.connect()
   })
   .catch(err => {
     console.error('Database connection error:', err);
+    // If SSL error in production, provide more helpful error
+    if (isProduction && err.message.includes('SSL')) {
+      console.error('SSL Error: If running locally in production mode, set SSL_ENABLED=false in .env');
+    }
   });
 
 export default {

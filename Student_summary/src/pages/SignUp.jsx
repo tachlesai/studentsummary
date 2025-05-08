@@ -50,7 +50,7 @@ const SignUp = () => {
       const formattedPhoneNumber = formatPhoneNumber(formData.phoneNumber);
       if (step === 1) {
         // Check if user already exists by email or phone number
-        const checkRes = await fetch('http://localhost:5001/api/check-user-exists', {
+        const checkRes = await fetch(`${API_BASE_URL}/check-user-exists`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: formData.email, phoneNumber: formattedPhoneNumber })
@@ -73,7 +73,7 @@ const SignUp = () => {
         const verificationResponse = await verifyCode(formattedPhoneNumber, verificationCode);
         if (verificationResponse.success) {
           // Proceed with registration
-          const registerResponse = await fetch('http://localhost:5001/api/register', {
+          const registerResponse = await fetch(`${API_BASE_URL}/register`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
