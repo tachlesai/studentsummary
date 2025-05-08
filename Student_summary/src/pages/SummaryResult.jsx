@@ -6,6 +6,18 @@ import API_BASE_URL from '../config';
 import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 
+// Style name mapping for display
+const styleDisplayNames = {
+  concise: 'תמציתי',
+  detailed: 'מפורט',
+  narrative: 'נרטיבי קצר',
+  thematic: 'תמטי/מחולק',
+  qa: 'שאלות ותשובות',
+  glossary: 'מילון מונחים',
+  steps: 'צעד אחר צעד',
+  tldr: 'TL;DR'
+};
+
 const SummaryResult = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -33,7 +45,7 @@ const SummaryResult = () => {
     }
   }, [location, navigate]);
   
-  const { summary, pdfPath, title, created_at } = summaryData;
+  const { summary, pdfPath, title, created_at, style } = summaryData;
   
   const handleBack = () => {
     navigate('/dashboard');
@@ -63,6 +75,9 @@ const SummaryResult = () => {
     });
   };
 
+  // Get the display name for the style
+  const styleDisplayName = style ? (styleDisplayNames[style] || style) : '';
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -83,11 +98,19 @@ const SummaryResult = () => {
         <Card className="shadow-lg border border-gray-200 overflow-hidden">
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 text-white">
             <h1 className="text-2xl font-bold mb-2">{title || 'סיכום'}</h1>
-            <div className="flex items-center text-blue-100 text-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span>{formatDate(created_at)}</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center text-blue-100 text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span>{formatDate(created_at)}</span>
+              </div>
+              
+              {styleDisplayName && (
+                <div className="bg-blue-700 text-white px-3 py-1 rounded-full text-xs font-medium">
+                  סגנון: {styleDisplayName}
+                </div>
+              )}
             </div>
           </div>
           

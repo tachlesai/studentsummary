@@ -167,39 +167,113 @@ async function summarizeWithGemini(text, options = {}) {
     // Add specific instructions based on the selected style
     switch (options.style) {
       case 'concise':
-        prompt += `\n\nCreate a concise summary using clear and concise bullet points. Focus only on the essential concepts, definitions, examples, and key ideas. Group related points where relevant. Each bullet point should capture one core idea in one sentence. Do not add external information or personal interpretation.`;
+        prompt += `\n\nCreate a concise summary using clear and concise bullet points. Focus only on the essential concepts, definitions, examples, and key ideas. Group related points where relevant. Each bullet point should capture one core idea in one sentence. Do not add external information or personal interpretation.
+        
+        Formatting for concise style:
+        - Use bullet points (•) for each main point
+        - Group related points under bold headers
+        - Start each bullet with a key term or concept in bold if applicable
+        - Keep each bullet to 1-2 sentences maximum
+        - Use emojis at the start of important points (📌, 🔑, 💡)
+        - End with a "Key Takeaways" section with 3-5 most important points`;
         break;
       
       case 'detailed':
-        prompt += `\n\nWrite a comprehensive and detailed summary that fully captures everything important that was said. Include explanations, definitions, processes, examples, and context, all written in clear and academic language. The goal is for a student to study from your summary as if they had attended the lecture. Structure the text logically, and maintain the same order of topics as in the original lecture.`;
+        prompt += `\n\nWrite a comprehensive and detailed summary that fully captures everything important that was said. Include explanations, definitions, processes, examples, and context, all written in clear and academic language. The goal is for a student to study from your summary as if they had attended the lecture. Structure the text logically, and maintain the same order of topics as in the original lecture.
+        
+        Formatting for detailed style:
+        - Use clear section headers with numbering (1, 2, 3)
+        - Include subsections with decimal numbering (1.1, 1.2, etc.)
+        - Format important definitions in blockquotes or with special formatting
+        - Use tables to organize related information when appropriate
+        - Include "Important Note:" sections for critical information
+        - End with a "Summary of Key Points" section`;
         break;
       
       case 'narrative':
-        prompt += `\n\nGenerate a brief narrative summary of the key ideas. Keep it to one or two well-structured paragraphs. Avoid excessive detail, and focus on delivering a readable, fluent overview of the main arguments, themes, or ideas. Use full sentences – do not use bullet points.`;
+        prompt += `\n\nGenerate a brief narrative summary of the key ideas. Keep it to one or two well-structured paragraphs. Avoid excessive detail, and focus on delivering a readable, fluent overview of the main arguments, themes, or ideas. Use full sentences – do not use bullet points.
+        
+        Formatting for narrative style:
+        - Write in flowing paragraphs with clear topic sentences
+        - Use italics for emphasis on key terms or concepts
+        - Keep to 2-3 paragraphs maximum
+        - Use transition words between ideas (furthermore, however, therefore)
+        - Focus on the relationships between concepts
+        - End with a concluding sentence that captures the main point`;
         break;
       
       case 'thematic':
-        prompt += `\n\nSummarize the content by dividing it into thematic sections or topic-based headers. Under each section, write a concise summary of the relevant material. Focus on clarity and structure. Ensure that all major areas covered in the lecture are represented. This is helpful for students who want to focus on specific parts of the lecture later.`;
+        prompt += `\n\nSummarize the content by dividing it into thematic sections or topic-based headers. Under each section, write a concise summary of the relevant material. Focus on clarity and structure. Ensure that all major areas covered in the lecture are represented. This is helpful for students who want to focus on specific parts of the lecture later.
+        
+        Formatting for thematic style:
+        - Use clear, descriptive section headers with emoji icons
+        - Start each section with a one-sentence overview
+        - Include 3-5 bullet points under each section
+        - Use bold text for key concepts in each section
+        - Add a "Connection" note at the end of each section showing how it relates to other sections
+        - End with a "Themes Overview" that lists all major themes`;
         break;
       
       case 'qa':
-        prompt += `\n\nExtract important information and convert it into a Q&A format suitable for student practice and revision. Each question should address a major topic or key concept mentioned in the lecture. Provide clear and direct answers based strictly on the content of the lecture. Do not invent or assume additional information. Aim for around 5–15 question-answer pairs, depending on the amount of material covered.`;
+        prompt += `\n\nExtract important information and convert it into a Q&A format suitable for student practice and revision. Each question should address a major topic or key concept mentioned in the lecture. Provide clear and direct answers based strictly on the content of the lecture. Do not invent or assume additional information. Aim for around 5–15 question-answer pairs, depending on the amount of material covered.
+        
+        Formatting for Q&A style:
+        - Format questions in bold and numbered (Q1, Q2, etc.)
+        - Group questions by topic with clear section headers
+        - Keep questions clear and specific
+        - Format answers in plain text below each question
+        - Include "Why it matters:" after important answers
+        - End with 2-3 "Review Questions" that require synthesizing multiple concepts`;
         break;
       
       case 'glossary':
-        prompt += `\n\nExtract a list of important terms and their definitions as presented or implied by the speaker. Only include terms that were explicitly mentioned or explained. For each term, provide a short and clear definition that reflects the context of the lecture. Format as a glossary-style list.`;
+        prompt += `\n\nExtract a list of important terms and their definitions as presented or implied by the speaker. Only include terms that were explicitly mentioned or explained. For each term, provide a short and clear definition that reflects the context of the lecture. Format as a glossary-style list.
+        
+        Formatting for glossary style:
+        - Format terms in bold and alphabetical order
+        - Provide clear, concise definitions (1-3 sentences)
+        - Include context or examples where mentioned
+        - Mark key terms with a star (★) symbol
+        - Group related terms under category headers if appropriate
+        - Include "See also:" references to related terms
+        - End with a "Core Concepts" section listing 5-7 most important terms`;
         break;
       
       case 'steps':
-        prompt += `\n\nIdentify any processes, methods, workflows, or step-based explanations. Summarize them clearly as a numbered list of steps, maintaining the logical sequence as presented in the lecture. This summary should help a student understand the "how" or "in what order" of the discussed content.`;
+        prompt += `\n\nIdentify any processes, methods, workflows, or step-based explanations. Summarize them clearly as a numbered list of steps, maintaining the logical sequence as presented in the lecture. This summary should help a student understand the "how" or "in what order" of the discussed content.
+        
+        Formatting for steps style:
+        - Use clear numbered steps (Step 1, Step 2, etc.)
+        - Start each step with an action verb
+        - Include a brief explanation for each step
+        - Add notes or warnings for tricky steps
+        - Use arrows (→) to show the flow between steps
+        - Include a "Before you begin" section if appropriate
+        - End with a "Common Mistakes" section`;
         break;
       
       case 'tldr':
-        prompt += `\n\nWrite a one-sentence summary that captures the core purpose or insight of the lecture in the simplest and clearest way possible. This should help a student quickly understand what the lecture was mainly about.`;
+        prompt += `\n\nWrite a one-sentence summary that captures the core purpose or insight of the lecture in the simplest and clearest way possible. This should help a student quickly understand what the lecture was mainly about. Then add 3-5 bullet points with the key supporting ideas.
+        
+        Formatting for TLDR style:
+        - Start with a single, bold sentence summary (maximum 25 words)
+        - Follow with 3-5 short bullet points of supporting details
+        - Use emojis to highlight the main categories of information
+        - Keep the entire summary under 150 words
+        - Focus only on the absolute most important concepts
+        - End with a "Why this matters:" single sentence`;
         break;
       
       default:
-        prompt += `\n\nCreate a balanced summary that captures the main points while maintaining readability and clarity.`;
+        prompt += `\n\nCreate a balanced summary that captures the main points while maintaining readability and clarity.
+        
+        Formatting for default style:
+        - Use clear section headers with numbering (1, 2, 3)
+        - Include subsections with decimal numbering (1.1, 1.2, etc.)
+        - Format important definitions in blockquotes or with special formatting
+        - Use tables to organize related information when appropriate
+        - Include "Important Note:" sections for critical information
+        - End with a "Summary of Key Points" section`;
     }
 
     // Add language preference
@@ -250,6 +324,7 @@ async function summarizeWithGemini(text, options = {}) {
 async function summarizeAudioWithGemini(filePath, options = {}) {
   try {
     console.log(`[DirectProcessor] Summarizing audio file: ${filePath}`);
+    console.log(`[DirectProcessor] Summary style: ${options.style || 'detailed'}`);
     
     // First check if Gemini is available
     if (!genAI) {
@@ -267,44 +342,173 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     // Create a model instance - using the newer Gemini 2.5 Pro model
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-exp-03-25" });
     
-    // Prepare the prompt for summarization with student-friendly formatting
-    const prompt = `You are an expert educational summarizer. Create a student-friendly summary of the following Hebrew audio recording.
-
-    Guidelines for the summary:
-    1. Language:
-       - Write the summary in Hebrew
-       - Use clear, simple Hebrew that students can understand
-       - Keep the language accessible and engaging
+    // Get the language from options or default to Hebrew
+    const language = options.language || 'he';
     
-    2. Structure:
-       - Start with a clear, simple overview of the main topic
-       - Break down complex ideas into easy-to-understand points
-       - Use clear headings and subheadings
-       - End with key takeaways or study points
+    // Get the style from options or default to detailed
+    const style = options.style || 'detailed';
     
-    3. Content:
-       - Focus on the most important concepts
-       - Explain difficult terms in simple language
-       - Include relevant examples that help understanding
-       - Highlight key definitions and formulas
-       - Add study tips or memory aids where helpful
+    // Base prompt for all summaries
+    let prompt = `You are an expert educational summarizer. Create a student-friendly summary of the following Hebrew audio recording.`;
     
-    4. Style:
-       - Use short paragraphs and bullet points
-       - Include "Key Points" sections
-       - Add "Remember" boxes for important information
-       - Use emojis or symbols to highlight important points (📝 for notes, 💡 for tips, ⭐ for key points)
+    // Add language-specific instructions
+    switch (language) {
+      case 'en':
+        prompt += `\n\nWrite the summary in English.`;
+        break;
+      case 'he':
+        prompt += `\n\nWrite the summary in Hebrew.`;
+        break;
+      case 'ar':
+        prompt += `\n\nWrite the summary in Arabic.`;
+        break;
+      case 'fr':
+        prompt += `\n\nWrite the summary in French.`;
+        break;
+      case 'ru':
+        prompt += `\n\nWrite the summary in Russian.`;
+        break;
+      default:
+        prompt += `\n\nWrite the summary in Hebrew.`;
+        break;
+    }
     
-    5. Study-Friendly Features:
-       - Add "Quick Review" sections
-       - Include "Practice Questions" where appropriate
-       - Highlight connections between different topics
-       - Add "Common Mistakes to Avoid" sections
-       - Include "Further Reading" suggestions if relevant
-
-    Please summarize the following audio recording following these guidelines.`;
+    // Add style-specific instructions
+    switch (style) {
+      case 'concise':
+        prompt += `\n\nCreate a concise summary using clear and concise bullet points. Focus only on the essential concepts, definitions, examples, and key ideas. Group related points where relevant. Each bullet point should capture one core idea in one sentence. Do not add external information or personal interpretation.
+        
+        Formatting for concise style:
+        - Use bullet points (•) for each main point
+        - Group related points under bold headers
+        - Start each bullet with a key term or concept in bold if applicable
+        - Keep each bullet to 1-2 sentences maximum
+        - Use emojis at the start of important points (📌, 🔑, 💡)
+        - End with a "Key Takeaways" section with 3-5 most important points`;
+        break;
+      
+      case 'detailed':
+        prompt += `\n\nWrite a comprehensive and detailed summary that fully captures everything important that was said. Include explanations, definitions, processes, examples, and context, all written in clear and academic language. The goal is for a student to study from your summary as if they had attended the lecture. Structure the text logically, and maintain the same order of topics as in the original lecture.
+        
+        Formatting for detailed style:
+        - Use clear section headers with numbering (1, 2, 3)
+        - Include subsections with decimal numbering (1.1, 1.2, etc.)
+        - Format important definitions in blockquotes or with special formatting
+        - Use tables to organize related information when appropriate
+        - Include "Important Note:" sections for critical information
+        - End with a "Summary of Key Points" section`;
+        break;
+      
+      case 'narrative':
+        prompt += `\n\nGenerate a brief narrative summary of the key ideas. Keep it to one or two well-structured paragraphs. Avoid excessive detail, and focus on delivering a readable, fluent overview of the main arguments, themes, or ideas. Use full sentences – do not use bullet points.
+        
+        Formatting for narrative style:
+        - Write in flowing paragraphs with clear topic sentences
+        - Use italics for emphasis on key terms or concepts
+        - Keep to 2-3 paragraphs maximum
+        - Use transition words between ideas (furthermore, however, therefore)
+        - Focus on the relationships between concepts
+        - End with a concluding sentence that captures the main point`;
+        break;
+      
+      case 'thematic':
+        prompt += `\n\nSummarize the content by dividing it into thematic sections or topic-based headers. Under each section, write a concise summary of the relevant material. Focus on clarity and structure. Ensure that all major areas covered in the lecture are represented. This is helpful for students who want to focus on specific parts of the lecture later.
+        
+        Formatting for thematic style:
+        - Use clear, descriptive section headers with emoji icons
+        - Start each section with a one-sentence overview
+        - Include 3-5 bullet points under each section
+        - Use bold text for key concepts in each section
+        - Add a "Connection" note at the end of each section showing how it relates to other sections
+        - End with a "Themes Overview" that lists all major themes`;
+        break;
+      
+      case 'qa':
+        prompt += `\n\nExtract important information and convert it into a Q&A format suitable for student practice and revision. Each question should address a major topic or key concept mentioned in the lecture. Provide clear and direct answers based strictly on the content of the lecture. Do not invent or assume additional information. Aim for around 5–15 question-answer pairs, depending on the amount of material covered.
+        
+        Formatting for Q&A style:
+        - Format questions in bold and numbered (Q1, Q2, etc.)
+        - Group questions by topic with clear section headers
+        - Keep questions clear and specific
+        - Format answers in plain text below each question
+        - Include "Why it matters:" after important answers
+        - End with 2-3 "Review Questions" that require synthesizing multiple concepts`;
+        break;
+      
+      case 'glossary':
+        prompt += `\n\nExtract a list of important terms and their definitions as presented or implied by the speaker. Only include terms that were explicitly mentioned or explained. For each term, provide a short and clear definition that reflects the context of the lecture. Format as a glossary-style list.
+        
+        Formatting for glossary style:
+        - Format terms in bold and alphabetical order
+        - Provide clear, concise definitions (1-3 sentences)
+        - Include context or examples where mentioned
+        - Mark key terms with a star (★) symbol
+        - Group related terms under category headers if appropriate
+        - Include "See also:" references to related terms
+        - End with a "Core Concepts" section listing 5-7 most important terms`;
+        break;
+      
+      case 'steps':
+        prompt += `\n\nIdentify any processes, methods, workflows, or step-based explanations. Summarize them clearly as a numbered list of steps, maintaining the logical sequence as presented in the lecture. This summary should help a student understand the "how" or "in what order" of the discussed content.
+        
+        Formatting for steps style:
+        - Use clear numbered steps (Step 1, Step 2, etc.)
+        - Start each step with an action verb
+        - Include a brief explanation for each step
+        - Add notes or warnings for tricky steps
+        - Use arrows (→) to show the flow between steps
+        - Include a "Before you begin" section if appropriate
+        - End with a "Common Mistakes" section`;
+        break;
+      
+      case 'tldr':
+        prompt += `\n\nWrite a one-sentence summary that captures the core purpose or insight of the lecture in the simplest and clearest way possible. This should help a student quickly understand what the lecture was mainly about. Then add 3-5 bullet points with the key supporting ideas.
+        
+        Formatting for TLDR style:
+        - Start with a single, bold sentence summary (maximum 25 words)
+        - Follow with 3-5 short bullet points of supporting details
+        - Use emojis to highlight the main categories of information
+        - Keep the entire summary under 150 words
+        - Focus only on the absolute most important concepts
+        - End with a "Why this matters:" single sentence`;
+        break;
+      
+      default:
+        // Default to detailed summary
+        prompt += `\n\nWrite a comprehensive and detailed summary that fully captures everything important that was said. Include explanations, definitions, processes, examples, and context, all written in clear and academic language. The goal is for a student to study from your summary as if they had attended the lecture. Structure the text logically, and maintain the same order of topics as in the original lecture.
+        
+        Formatting for detailed style:
+        - Use clear section headers with numbering (1, 2, 3)
+        - Include subsections with decimal numbering (1.1, 1.2, etc.)
+        - Format important definitions in blockquotes or with special formatting
+        - Use tables to organize related information when appropriate
+        - Include "Important Note:" sections for critical information
+        - End with a "Summary of Key Points" section`;
+    }
     
+    // Add general formatting guidelines
+    prompt += `\n\nGeneral formatting guidelines:
+    - Use clear, simple language that students can understand
+    - Break down complex ideas into easy-to-understand points
+    - Focus on the most important concepts
+    - Explain difficult terms in simple language
+    - Include relevant examples that help understanding
+    - Highlight key definitions and formulas
+    - Add study tips or memory aids where helpful`;
+    
+    // Add emojis and formatting based on style
+    if (style !== 'narrative' && style !== 'tldr') {
+      prompt += `\n\nUse appropriate formatting:
+      - Use emojis or symbols to highlight important points (📝 for notes, 💡 for tips, ⭐ for key points)
+      - Include "Key Points" sections where appropriate
+      - Add "Remember" boxes for important information`;
+    }
+    
+    prompt += `\n\nPlease summarize the following audio recording following these guidelines.`;
+    
+    console.log(`[DirectProcessor] Using summary style: ${style}`);
     console.log(`[DirectProcessor] Sending request to Gemini API for summarization...`);
+    
     // Send to Gemini API
     const result = await model.generateContent([
       prompt,

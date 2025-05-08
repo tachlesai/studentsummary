@@ -292,7 +292,8 @@ const StudentDashboard = () => {
             summary: parsedData.summary,
             pdfPath: parsedData.pdfPath,
             title: parsedData.title,
-            created_at: parsedData.created_at
+            created_at: parsedData.created_at,
+            style: parsedData.style || 'detailed'
           }
         });
       } catch (error) {
@@ -558,7 +559,8 @@ const StudentDashboard = () => {
                             pdfPath: summary.pdf_path,
                             title: summary.title || 'ללא כותרת',
                             created_at: summary.created_at,
-                            file_name: summary.file_name
+                            file_name: summary.file_name,
+                            style: summary.style || 'detailed'
                           }
                         });
                       }}
