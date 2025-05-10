@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Box, Button, Typography, CircularProgress, Alert, LinearProgress } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -10,6 +10,48 @@ const FileUpload = ({ onUploadComplete }) => {
   const [progress, setProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState('');
   const [fileInfo, setFileInfo] = useState(null);
+  const [queueInfo, setQueueInfo] = useState(null);
+  const [queueCheckInterval, setQueueCheckInterval] = useState(null);
+
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (queueCheckInterval) {
+        clearInterval(queueCheckInterval);
+      }
+    };
+  }, [queueCheckInterval]);
+
+  const checkQueueStatus = useCallback(async (queueId) => {
+    try {
+      const response = await fetch(`/api/queue-status?id=${queueId}`);
+      if (!response.ok) {
+        throw new Error('Failed to check queue status');
+      }
+      
+      const data = await response.json();
+      
+      if (data.status === 'processing') {
+        setProcessingStage(`Processing file... (${data.progress || 0}%)`);
+        setProgress(data.progress || 0);
+      } else if (data.status === 'queued') {
+        setProcessingStage(`In queue (position ${data.position})`);
+        setProgress(0);
+      } else if (data.status === 'completed') {
+        // Clear interval and handle completion
+        if (queueCheckInterval) {
+          clearInterval(queueCheckInterval);
+          setQueueCheckInterval(null);
+        }
+        
+        onUploadComplete(data.result);
+        setIsProcessing(false);
+        setQueueInfo(null);
+      }
+    } catch (error) {
+      console.error('Error checking queue status:', error);
+    }
+  }, [onUploadComplete, queueCheckInterval]);
 
   const onDrop = useCallback(async (acceptedFiles) => {
     const file = acceptedFiles[0];
@@ -55,50 +97,57 @@ const FileUpload = ({ onUploadComplete }) => {
 
       // Upload to server with progress tracking
       console.log('[FileUpload] Uploading processed file...');
-      const xhr = new XMLHttpRequest();
       
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const uploadProgress = (event.loaded / event.total) * 100;
-          setProgress(uploadProgress);
-        }
-      };
-
-      const uploadPromise = new Promise((resolve, reject) => {
-        xhr.onload = () => {
-          if (xhr.status === 200) {
-            resolve(JSON.parse(xhr.responseText));
-          } else {
-            try {
-              const errorResponse = JSON.parse(xhr.responseText);
-              reject(new Error(errorResponse.error || 'Upload failed'));
-            } catch (e) {
-              reject(new Error(`Upload failed with status ${xhr.status}`));
-            }
+      // Use fetch for better control over the response
+      const response = await fetch('/api/process-audio', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          // No Content-Type header as it's set by the FormData
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.lengthComputable) {
+            const uploadProgress = (progressEvent.loaded / progressEvent.total) * 100;
+            setProgress(uploadProgress);
           }
-        };
-        xhr.onerror = () => reject(new Error('Upload failed'));
-        xhr.open('POST', '/api/process-audio');
-        xhr.send(formData);
+        }
       });
-
-      const result = await uploadPromise;
-      console.log('[FileUpload] Upload complete');
       
-      // Clean up
-      await audioProcessor.cleanup();
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+      }
       
-      // Notify parent component
-      onUploadComplete(result);
+      const result = await response.json();
+      
+      // Check if the file is queued
+      if (result.status === 'queued') {
+        setQueueInfo(result);
+        setProcessingStage(`In queue (position ${result.position})`);
+        
+        // Set up polling to check queue status
+        const intervalId = setInterval(() => {
+          checkQueueStatus(result.id);
+        }, 5000); // Check every 5 seconds
+        
+        setQueueCheckInterval(intervalId);
+      } else {
+        // File was processed immediately
+        console.log('[FileUpload] Upload complete');
+        
+        // Clean up
+        await audioProcessor.cleanup();
+        
+        // Notify parent component
+        onUploadComplete(result);
+        setIsProcessing(false);
+      }
     } catch (err) {
       console.error('[FileUpload] Error:', err);
       setError(err.message || 'Failed to process file');
-    } finally {
       setIsProcessing(false);
-      setProgress(0);
-      setProcessingStage('');
     }
-  }, [onUploadComplete]);
+  }, [onUploadComplete, checkQueueStatus]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -139,17 +188,25 @@ const FileUpload = ({ onUploadComplete }) => {
         </Typography>
         <Typography variant="body2" color="textSecondary">
           {isProcessing 
-            ? fileInfo ? `Processing ${fileInfo.name} (${fileInfo.originalSize}MB)...` 
-            : 'Please wait while we process your file...'
+            ? queueInfo 
+              ? `Your file is in queue for processing (position ${queueInfo.position})`
+              : fileInfo 
+                ? `Processing ${fileInfo.name} (${fileInfo.originalSize}MB)...` 
+                : 'Please wait while we process your file...'
             : 'Supported formats: MP4, MOV, MP3, WAV, M4A (Max 1GB)'}
         </Typography>
         
         {isProcessing && (
           <Box sx={{ mt: 2, width: '100%' }}>
-            <LinearProgress variant="determinate" value={progress} />
-            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-              {Math.round(progress)}%
-            </Typography>
+            <LinearProgress 
+              variant={queueInfo ? "indeterminate" : "determinate"} 
+              value={progress} 
+            />
+            {!queueInfo && (
+              <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                {Math.round(progress)}%
+              </Typography>
+            )}
           </Box>
         )}
       </Box>

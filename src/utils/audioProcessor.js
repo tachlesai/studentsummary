@@ -55,6 +55,9 @@ class AudioProcessor {
         await this.initialize();
       }
 
+      // Log original file size
+      console.log(`[AudioProcessor] Original file size: ${Math.round(file.size / (1024 * 1024))}MB`);
+
       // Generate a secure random name for the output file
       const outputFileName = `processed_${crypto.randomUUID()}.mp3`;
       
@@ -65,10 +68,11 @@ class AudioProcessor {
         
         // Check if the processed file is still too large for server upload
         if (blob.size > this.maxFileSize) {
-          console.log('[AudioProcessor] Processed file still too large, compressing further...');
+          console.log(`[AudioProcessor] Processed file still too large (${Math.round(blob.size / (1024 * 1024))}MB), compressing further...`);
           return await this.compressFurther(blob, onProgress);
         }
         
+        console.log(`[AudioProcessor] Final compressed size: ${Math.round(blob.size / (1024 * 1024))}MB`);
         return blob;
       }
 
@@ -76,12 +80,13 @@ class AudioProcessor {
       console.log('[AudioProcessor] Processing file...');
       await this.ffmpeg.writeFile(file.name, await fetchFile(file));
 
-      // First pass - extract audio only
+      // Extract audio and compress
       await this.ffmpeg.exec([
         '-i', file.name,
         '-vn', // No video
         '-acodec', 'libmp3lame', // Use MP3 codec
-        '-ab', '64k', // Lower bitrate
+        '-ab', '32k', // Lower bitrate
+        '-ac', '1', // Mono audio
         '-ar', '22050', // Lower sample rate
         '-y', // Overwrite output file if exists
         outputFileName
@@ -96,6 +101,7 @@ class AudioProcessor {
 
       // Convert to blob
       let blob = new Blob([data], { type: 'audio/mpeg' });
+      console.log(`[AudioProcessor] Compressed size: ${Math.round(blob.size / (1024 * 1024))}MB`);
       
       // Check if the processed file is still too large for server upload
       if (blob.size > this.maxFileSize) {
@@ -103,7 +109,7 @@ class AudioProcessor {
         blob = await this.compressFurther(blob, onProgress);
       }
       
-      console.log('[AudioProcessor] Audio processing complete');
+      console.log(`[AudioProcessor] Final compressed size: ${Math.round(blob.size / (1024 * 1024))}MB`);
       return blob;
     } catch (error) {
       console.error('[AudioProcessor] Processing error:', error);
@@ -119,13 +125,63 @@ class AudioProcessor {
       // Write blob to FFmpeg
       await this.ffmpeg.writeFile(tempFileName, await fetchFile(blob));
       
-      // Compress with lower bitrate and mono audio
+      // Compress with very low bitrate and mono audio
+      if (onProgress) onProgress(50);
+      
       await this.ffmpeg.exec([
         '-i', tempFileName,
         '-ac', '1', // Mono audio
         '-acodec', 'libmp3lame',
-        '-ab', '24k', // Very low bitrate
-        '-ar', '16000', // Lower sample rate
+        '-ab', '16k', // Very low bitrate
+        '-ar', '8000', // Very low sample rate
+        '-y',
+        outputFileName
+      ]);
+      
+      if (onProgress) onProgress(75);
+      
+      // Read compressed file
+      const data = await this.ffmpeg.readFile(outputFileName);
+      
+      // Clean up
+      await this.ffmpeg.deleteFile(tempFileName);
+      await this.ffmpeg.deleteFile(outputFileName);
+      
+      if (onProgress) onProgress(90);
+      
+      // Convert to blob
+      const compressedBlob = new Blob([data], { type: 'audio/mpeg' });
+      console.log(`[AudioProcessor] Further compressed file size: ${Math.round(compressedBlob.size / (1024 * 1024))}MB`);
+      
+      // If still too large, try one more time with even more aggressive compression
+      if (compressedBlob.size > this.maxFileSize) {
+        console.log('[AudioProcessor] File still too large, attempting final compression...');
+        return await this.finalCompression(compressedBlob, onProgress);
+      }
+      
+      if (onProgress) onProgress(100);
+      return compressedBlob;
+    } catch (error) {
+      console.error('[AudioProcessor] Further compression error:', error);
+      throw error;
+    }
+  }
+
+  async finalCompression(blob, onProgress) {
+    try {
+      const tempFileName = `final_${crypto.randomUUID()}.mp3`;
+      const outputFileName = `final_compressed_${crypto.randomUUID()}.mp3`;
+      
+      // Write blob to FFmpeg
+      await this.ffmpeg.writeFile(tempFileName, await fetchFile(blob));
+      
+      // Compress with extremely low bitrate and mono audio
+      await this.ffmpeg.exec([
+        '-i', tempFileName,
+        '-ac', '1', // Mono audio
+        '-acodec', 'libmp3lame',
+        '-ab', '8k', // Extremely low bitrate
+        '-ar', '8000', // Very low sample rate
         '-y',
         outputFileName
       ]);
@@ -138,17 +194,18 @@ class AudioProcessor {
       await this.ffmpeg.deleteFile(outputFileName);
       
       // Convert to blob
-      const compressedBlob = new Blob([data], { type: 'audio/mpeg' });
-      console.log(`[AudioProcessor] Further compressed file size: ${Math.round(compressedBlob.size / (1024 * 1024))}MB`);
+      const finalBlob = new Blob([data], { type: 'audio/mpeg' });
+      console.log(`[AudioProcessor] Final compressed file size: ${Math.round(finalBlob.size / (1024 * 1024))}MB`);
       
       // If still too large, throw error
-      if (compressedBlob.size > this.maxFileSize) {
-        throw new Error(`File is too large (${Math.round(compressedBlob.size / (1024 * 1024))}MB) even after compression. Maximum size is ${Math.round(this.maxFileSize / (1024 * 1024))}MB.`);
+      if (finalBlob.size > this.maxFileSize) {
+        throw new Error(`File is too large (${Math.round(finalBlob.size / (1024 * 1024))}MB) even after maximum compression. Maximum size is ${Math.round(this.maxFileSize / (1024 * 1024))}MB. Please use a shorter recording.`);
       }
       
-      return compressedBlob;
+      if (onProgress) onProgress(100);
+      return finalBlob;
     } catch (error) {
-      console.error('[AudioProcessor] Further compression error:', error);
+      console.error('[AudioProcessor] Final compression error:', error);
       throw error;
     }
   }
@@ -171,8 +228,9 @@ class AudioProcessor {
           '-i', chunkName,
           '-vn',
           '-acodec', 'libmp3lame',
-          '-ab', '48k',
-          '-ar', '22050',
+          '-ab', '24k',
+          '-ac', '1', // Mono audio
+          '-ar', '16000',
           '-y',
           `processed_${chunkName}`
         ]);
@@ -200,7 +258,9 @@ class AudioProcessor {
         offset += chunk.length;
       }
 
-      return new Blob([combinedData], { type: 'audio/mpeg' });
+      const blob = new Blob([combinedData], { type: 'audio/mpeg' });
+      console.log(`[AudioProcessor] Combined chunks size: ${Math.round(blob.size / (1024 * 1024))}MB`);
+      return blob;
     } catch (error) {
       console.error('[AudioProcessor] Large file processing error:', error);
       throw new Error(`Failed to process large file: ${error.message}`);

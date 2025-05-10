@@ -33,8 +33,8 @@ const corsOptions = {
 // Middleware
 app.use(cors(corsOptions));
 // Increase JSON body size limit to handle large audio recordings
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -95,9 +95,13 @@ const upload = multer({
 
 // Flexible upload middleware that handles both 'audio' and 'audioFile' fields
 const flexibleUpload = (req, res, next) => {
+  console.log('Request body fields:', Object.keys(req.body || {}));
+  console.log('Request files:', req.files);
+  
   const uploadMiddleware = upload.single('audioFile');
   uploadMiddleware(req, res, (err) => {
     if (err) {
+      console.error('Upload error:', err);
       if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
           return res.status(413).json({ error: 'File size exceeds the 50MB limit.' });
@@ -112,6 +116,7 @@ const flexibleUpload = (req, res, next) => {
       const audioUpload = upload.single('audio');
       audioUpload(req, res, (err) => {
         if (err) {
+          console.error('Upload error (audio field):', err);
           if (err instanceof multer.MulterError) {
             if (err.code === 'LIMIT_FILE_SIZE') {
               return res.status(413).json({ error: 'File size exceeds the 50MB limit.' });
@@ -122,7 +127,7 @@ const flexibleUpload = (req, res, next) => {
         }
         
         if (!req.file) {
-          console.log('Files received:', req.files);
+          console.log('No file found in any field');
           return res.status(400).json({ error: 'No audio file uploaded. Please upload a file with field name "audioFile" or "audio".' });
         }
         
@@ -138,6 +143,45 @@ const flexibleUpload = (req, res, next) => {
       next();
     }
   });
+};
+
+// Add a simple queue system
+const processingQueue = {
+  queue: [],
+  isProcessing: false,
+  
+  // Add a request to the queue
+  add(task) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({
+        task,
+        resolve,
+        reject
+      });
+      
+      this.processNext();
+    });
+  },
+  
+  // Process the next item in the queue
+  async processNext() {
+    if (this.isProcessing || this.queue.length === 0) {
+      return;
+    }
+    
+    this.isProcessing = true;
+    const { task, resolve, reject } = this.queue.shift();
+    
+    try {
+      const result = await task();
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    } finally {
+      this.isProcessing = false;
+      this.processNext();
+    }
+  }
 };
 
 // Process audio endpoint - for file uploads
@@ -172,62 +216,82 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
       throw new Error(`File size exceeds limit of 50MB. Please compress the file further.`);
     }
     
-    // Process the file with the Gemini API
-    console.log('Processing with Gemini API...');
+    // Get the queue position
+    const queuePosition = processingQueue.queue.length;
     
-    // Use the processAudio function from directAudioProcessor.js
-    const result = await processAudio(audioPath, {
-      onlyTranscribe: false,
-      skipTranscription: false,
-      skipSummarization: false,
-      style: parsedOptions.style || 'detailed',
-      language: parsedOptions.language || 'he'
-    });
-    
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to process audio');
+    // Send initial response with queue position
+    if (queuePosition > 0) {
+      console.log(`File added to queue at position ${queuePosition}`);
+      res.write(JSON.stringify({
+        status: 'queued',
+        position: queuePosition,
+        message: `Your file is in queue for processing (position ${queuePosition}). Please wait...`
+      }));
     }
     
-    console.log('Received summary from Gemini API');
-
-    // Save to database
-    try {
-      const query = `
-        INSERT INTO summaries (user_email, title, summary, pdf_path, file_name, created_at)
-        VALUES ($1, $2, $3, $4, $5, NOW())
-        RETURNING id
-      `;
+    // Add to processing queue
+    const result = await processingQueue.add(async () => {
+      console.log(`Processing file from queue: ${audioPath}`);
       
-      const values = [
-        req.user.email,
-        title,
-        result.summary,
-        null,
-        filename
-      ];
+      // Process the file with the Gemini API
+      console.log('Processing with Gemini API...');
       
-      const dbResult = await db.query(query, values);
-      console.log(`Summary saved to database with ID: ${dbResult.rows[0].id}`);
-    } catch (dbError) {
-      console.error('Database error:', dbError);
-      // Continue with the response even if database save fails
-    }
-
-    // Clean up the uploaded file
-    await cleanupAllFiles([audioPath], { cleanDebugFiles: true });
-
-    // Send response
-    res.json({
-      success: true,
-      summary: {
-        content: result.summary,
-        title: title,
-        created_at: new Date().toISOString(),
-        pdf_path: null,
-        file_name: filename,
-        style: parsedOptions.style || 'detailed'
+      // Use the processAudio function from directAudioProcessor.js
+      const result = await processAudio(audioPath, {
+        onlyTranscribe: false,
+        skipTranscription: false,
+        skipSummarization: false,
+        style: parsedOptions.style || 'detailed',
+        language: parsedOptions.language || 'he'
+      });
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to process audio');
       }
+      
+      console.log('Received summary from Gemini API');
+  
+      // Save to database
+      try {
+        const query = `
+          INSERT INTO summaries (user_email, title, summary, pdf_path, file_name, created_at)
+          VALUES ($1, $2, $3, $4, $5, NOW())
+          RETURNING id
+        `;
+        
+        const values = [
+          req.user.email,
+          title,
+          result.summary,
+          null,
+          filename
+        ];
+        
+        const dbResult = await db.query(query, values);
+        console.log(`Summary saved to database with ID: ${dbResult.rows[0].id}`);
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+        // Continue with the response even if database save fails
+      }
+  
+      // Clean up the uploaded file
+      await cleanupAllFiles([audioPath], { cleanDebugFiles: true });
+  
+      return {
+        success: true,
+        summary: {
+          content: result.summary,
+          title: title,
+          created_at: new Date().toISOString(),
+          pdf_path: null,
+          file_name: filename,
+          style: parsedOptions.style || 'detailed'
+        }
+      };
     });
+    
+    // Send the final response
+    res.json(result);
   } catch (error) {
     console.error('Error processing audio:', error);
     
