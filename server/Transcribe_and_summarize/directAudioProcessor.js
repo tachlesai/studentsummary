@@ -352,14 +352,20 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
         const ffmpeg = spawn('ffmpeg', [
           '-i', filePath,
           '-vn', // No video
-          '-acodec', 'libmp3lame', // Use MP3 codec
-          '-ab', '128k', // Audio bitrate
-          '-ar', '44100', // Sample rate
+          '-acodec', 'aac', // Use AAC codec (faster than MP3)
+          '-ab', '64k', // Lower bitrate (64kbps is fine for speech)
+          '-ar', '22050', // Lower sample rate (22.05kHz is fine for speech)
+          '-loglevel', 'error', // Only show errors
           audioFilePath
         ]);
 
+        let lastProgress = 0;
         ffmpeg.stderr.on('data', (data) => {
-          console.log(`[DirectProcessor] FFmpeg: ${data}`);
+          const output = data.toString();
+          // Only log errors
+          if (output.includes('Error')) {
+            console.log(`[DirectProcessor] FFmpeg Error: ${output}`);
+          }
         });
 
         ffmpeg.on('close', (code) => {
@@ -377,7 +383,12 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
       const audioSizeMB = audioStats.size / (1024 * 1024);
       console.log(`[DirectProcessor] Extracted audio size: ${audioSizeMB.toFixed(2)}MB`);
       
-      mimeType = 'audio/mpeg';
+      // Check if the extracted audio is too large
+      if (audioSizeMB > 100) {
+        throw new Error(`Extracted audio file is too large (${audioSizeMB.toFixed(2)}MB). Maximum size is 100MB.`);
+      }
+      
+      mimeType = 'audio/mp4';
     } else {
       // Handle other audio formats
       switch (ext) {
@@ -415,6 +426,10 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     const chunks = [];
     let totalBytes = 0;
     
+    // Get the correct file size for progress tracking
+    const audioStats = fs.statSync(audioFilePath);
+    const totalSize = audioStats.size;
+    
     // Process the file in chunks
     for await (const chunk of fileStream) {
       chunks.push(chunk);
@@ -422,7 +437,7 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
       
       // Log progress every 10MB
       if (totalBytes % (10 * 1024 * 1024) === 0) {
-        console.log(`[DirectProcessor] Processed ${(totalBytes / (1024 * 1024)).toFixed(2)}MB of ${(stats.size / (1024 * 1024)).toFixed(2)}MB`);
+        console.log(`[DirectProcessor] Processed ${(totalBytes / (1024 * 1024)).toFixed(2)}MB of ${(totalSize / (1024 * 1024)).toFixed(2)}MB`);
       }
     }
     
