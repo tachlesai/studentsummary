@@ -420,29 +420,21 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     
     console.log(`[DirectProcessor] Sending request to Gemini API for summarization...`);
     
-    // Read file in chunks to manage memory
-    const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
-    const fileStream = fs.createReadStream(audioFilePath, { highWaterMark: CHUNK_SIZE });
-    const chunks = [];
-    let totalBytes = 0;
+    // Read the entire file into a buffer
+    const fileBuffer = fs.readFileSync(audioFilePath);
+    console.log(`[DirectProcessor] Read file into memory: ${(fileBuffer.length / (1024 * 1024)).toFixed(2)}MB`);
     
-    // Get the correct file size for progress tracking
-    const audioStats = fs.statSync(audioFilePath);
-    const totalSize = audioStats.size;
+    // Convert to base64
+    const base64Data = fileBuffer.toString('base64');
+    console.log(`[DirectProcessor] Converted to base64: ${(base64Data.length / (1024 * 1024)).toFixed(2)}MB`);
     
-    // Process the file in chunks
-    for await (const chunk of fileStream) {
-      chunks.push(chunk);
-      totalBytes += chunk.length;
-      
-      // Log progress every 10MB
-      if (totalBytes % (10 * 1024 * 1024) === 0) {
-        console.log(`[DirectProcessor] Processed ${(totalBytes / (1024 * 1024)).toFixed(2)}MB of ${(totalSize / (1024 * 1024)).toFixed(2)}MB`);
-      }
-    }
-    
-    // Combine chunks into a single buffer
-    const fileBuffer = Buffer.concat(chunks);
+    // Log memory usage
+    const used = process.memoryUsage();
+    console.log(`[DirectProcessor] Memory usage:
+      - Heap Total: ${(used.heapTotal / 1024 / 1024).toFixed(2)}MB
+      - Heap Used: ${(used.heapUsed / 1024 / 1024).toFixed(2)}MB
+      - RSS: ${(used.rss / 1024 / 1024).toFixed(2)}MB
+      - External: ${(used.external / 1024 / 1024).toFixed(2)}MB`);
     
     // Send to Gemini API
     const result = await model.generateContent([
@@ -450,7 +442,7 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
       {
         inlineData: {
           mimeType: mimeType,
-          data: fileBuffer.toString('base64')
+          data: base64Data
         }
       }
     ]);
