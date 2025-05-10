@@ -458,38 +458,72 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     
     // Process the file in chunks
     for await (const chunk of fileStream.pipe(base64Stream)) {
-      // Append chunk to buffer
-      base64Buffer = Buffer.concat([base64Buffer, Buffer.from(chunk)]);
-      
-      // If buffer is large enough, send to Gemini
-      if (base64Buffer.length >= CHUNK_SIZE) {
-        const chunkToSend = base64Buffer.slice(0, CHUNK_SIZE);
-        base64Buffer = base64Buffer.slice(CHUNK_SIZE);
+      try {
+        // Append chunk to buffer
+        base64Buffer = Buffer.concat([base64Buffer, Buffer.from(chunk)]);
         
-        // Send chunk to Gemini
-        await model.generateContent([
-          prompt,
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: chunkToSend.toString()
-            }
+        // If buffer is large enough, send to Gemini
+        if (base64Buffer.length >= CHUNK_SIZE) {
+          const chunkToSend = base64Buffer.slice(0, CHUNK_SIZE);
+          base64Buffer = base64Buffer.slice(CHUNK_SIZE);
+          
+          // Ensure the chunk is properly Base64 encoded
+          const base64Data = chunkToSend.toString('base64');
+          
+          // Validate Base64 string
+          if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64Data)) {
+            throw new Error('Invalid Base64 encoding detected');
           }
-        ]);
+          
+          // Send chunk to Gemini
+          const result = await model.generateContent([
+            prompt,
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data
+              }
+            }
+          ]);
+          
+          // Store the result for later use
+          if (!result) {
+            throw new Error('No response received from Gemini API');
+          }
+        }
+      } catch (error) {
+        console.error(`[DirectProcessor] Error processing chunk:`, error);
+        throw new Error(`Failed to process audio chunk: ${error.message}`);
       }
     }
     
     // Send any remaining data
     if (base64Buffer.length > 0) {
-      await model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            mimeType: mimeType,
-            data: base64Buffer.toString()
-          }
+      try {
+        const base64Data = base64Buffer.toString('base64');
+        
+        // Validate Base64 string
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64Data)) {
+          throw new Error('Invalid Base64 encoding detected in final chunk');
         }
-      ]);
+        
+        const result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: base64Data
+            }
+          }
+        ]);
+        
+        if (!result) {
+          throw new Error('No response received from Gemini API for final chunk');
+        }
+      } catch (error) {
+        console.error(`[DirectProcessor] Error processing final chunk:`, error);
+        throw new Error(`Failed to process final audio chunk: ${error.message}`);
+      }
     }
     
     console.log(`[DirectProcessor] Total processed: ${(totalBytesRead / (1024 * 1024)).toFixed(2)}MB`);
