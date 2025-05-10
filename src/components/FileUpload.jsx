@@ -9,6 +9,7 @@ const FileUpload = ({ onUploadComplete }) => {
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
   const [processingStage, setProcessingStage] = useState('');
+  const [fileInfo, setFileInfo] = useState(null);
 
   const onDrop = useCallback(async (acceptedFiles) => {
     const file = acceptedFiles[0];
@@ -19,19 +20,38 @@ const FileUpload = ({ onUploadComplete }) => {
       setError(null);
       setProgress(0);
       setProcessingStage('Processing audio...');
+      setFileInfo({
+        originalSize: Math.round(file.size / (1024 * 1024)),
+        name: file.name
+      });
 
       // Process the file with progress updates
-      console.log('[FileUpload] Starting file processing...');
+      console.log(`[FileUpload] Starting file processing... Original size: ${Math.round(file.size / (1024 * 1024))}MB`);
       const processedBlob = await audioProcessor.processAudio(file, (progress) => {
         setProgress(progress);
       });
       
+      console.log(`[FileUpload] Processing complete. Compressed size: ${Math.round(processedBlob.size / (1024 * 1024))}MB`);
+      
+      // Check if the processed file is still too large
+      if (processedBlob.size > 50 * 1024 * 1024) {
+        throw new Error(`File is still too large (${Math.round(processedBlob.size / (1024 * 1024))}MB) after compression. Maximum size is 50MB.`);
+      }
+      
       setProcessingStage('Uploading to server...');
       setProgress(0);
 
-      // Create form data
+      // Create form data with the processed blob
       const formData = new FormData();
-      formData.append('audio', processedBlob, 'processed_audio.mp3');
+      formData.append('audioFile', processedBlob, 'processed_audio.mp3');
+      
+      // Add options to the form data
+      const options = {
+        style: 'detailed',
+        language: 'he',
+        outputType: 'summary'
+      };
+      formData.append('options', JSON.stringify(options));
 
       // Upload to server with progress tracking
       console.log('[FileUpload] Uploading processed file...');
@@ -49,11 +69,16 @@ const FileUpload = ({ onUploadComplete }) => {
           if (xhr.status === 200) {
             resolve(JSON.parse(xhr.responseText));
           } else {
-            reject(new Error('Upload failed'));
+            try {
+              const errorResponse = JSON.parse(xhr.responseText);
+              reject(new Error(errorResponse.error || 'Upload failed'));
+            } catch (e) {
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
           }
         };
         xhr.onerror = () => reject(new Error('Upload failed'));
-        xhr.open('POST', '/api/summarize');
+        xhr.open('POST', '/api/process-audio');
         xhr.send(formData);
       });
 
@@ -114,7 +139,8 @@ const FileUpload = ({ onUploadComplete }) => {
         </Typography>
         <Typography variant="body2" color="textSecondary">
           {isProcessing 
-            ? 'Please wait while we process your file...'
+            ? fileInfo ? `Processing ${fileInfo.name} (${fileInfo.originalSize}MB)...` 
+            : 'Please wait while we process your file...'
             : 'Supported formats: MP4, MOV, MP3, WAV, M4A (Max 1GB)'}
         </Typography>
         

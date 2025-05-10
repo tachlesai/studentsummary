@@ -85,45 +85,58 @@ const storage = multer.diskStorage({
   }
 });
 
+// Configure multer with file size limit
 const upload = multer({ 
   storage: storage,
   limits: {
-    fileSize: 1024 * 1024 * 1024 // 1GB limit
+    fileSize: 50 * 1024 * 1024 // 50MB limit
   }
 });
 
-// Create a more flexible upload middleware that can handle different field names
+// Flexible upload middleware that handles both 'audio' and 'audioFile' fields
 const flexibleUpload = (req, res, next) => {
-  // Use multer.any() to accept any field name
-  const uploadAny = multer({ storage: storage }).any();
-  
-  uploadAny(req, res, function(err) {
+  const uploadMiddleware = upload.single('audioFile');
+  uploadMiddleware(req, res, (err) => {
     if (err) {
-      console.error('Multer error:', err);
-      return res.status(400).json({ 
-        success: false, 
-        error: `Upload error: ${err.message}` 
-      });
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ error: 'File size exceeds the 50MB limit.' });
+        }
+        return res.status(400).json({ error: `Upload error: ${err.message}` });
+      }
+      return res.status(500).json({ error: `Server error during upload: ${err.message}` });
     }
     
-    // Log the files received
-    console.log('Files received:', req.files ? req.files.map(f => ({ 
-      fieldname: f.fieldname, 
-      originalname: f.originalname,
-      mimetype: f.mimetype,
-      size: f.size
-    })) : 'No files');
-    
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'No audio file uploaded' 
+    if (!req.file) {
+      console.log('No file found in audioFile field, trying audio field');
+      const audioUpload = upload.single('audio');
+      audioUpload(req, res, (err) => {
+        if (err) {
+          if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+              return res.status(413).json({ error: 'File size exceeds the 50MB limit.' });
+            }
+            return res.status(400).json({ error: `Upload error: ${err.message}` });
+          }
+          return res.status(500).json({ error: `Server error during upload: ${err.message}` });
+        }
+        
+        if (!req.file) {
+          console.log('Files received:', req.files);
+          return res.status(400).json({ error: 'No audio file uploaded. Please upload a file with field name "audioFile" or "audio".' });
+        }
+        
+        next();
       });
+    } else {
+      console.log('Files received:', [req.file].filter(Boolean).map(f => ({
+        fieldname: f.fieldname,
+        originalname: f.originalname,
+        mimetype: f.mimetype,
+        size: f.size
+      })));
+      next();
     }
-    
-    // Use the first file
-    req.file = req.files[0];
-    next();
   });
 };
 
