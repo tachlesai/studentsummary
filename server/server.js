@@ -8,6 +8,9 @@ import { processAudio, cleanupAllFiles } from './Transcribe_and_summarize/direct
 import db from './db.js';
 import bcrypt from 'bcryptjs';
 import { summarizeAudioWithGemini } from './Transcribe_and_summarize/summarizeAudioWithGemini.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -905,7 +908,7 @@ app.post('/api/summarize', multer().single('audio'), async (req, res) => {
     const { style = 'detailed', language = 'hebrew' } = req.body;
 
     // Process the audio file
-    const summary = await summarizeAudioWithGemini(req.file.path, { style, language });
+    const summary = await summarizeAudioWithGemini(req.file.path, style, language);
 
     // Clean up the uploaded file
     fs.unlinkSync(req.file.path);
