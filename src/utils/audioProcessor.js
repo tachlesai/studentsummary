@@ -5,9 +5,9 @@ class AudioProcessor {
   constructor() {
     this.ffmpeg = null;
     this.initialized = false;
-    this.maxFileSize = 1024 * 1024 * 1024; // 1GB limit
+    this.maxFileSize = 50 * 1024 * 1024; // 50MB limit for server upload
     this.allowedTypes = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/wav', 'audio/mp4'];
-    this.processingChunkSize = 100 * 1024 * 1024; // 100MB chunks
+    this.processingChunkSize = 100 * 1024 * 1024; // 100MB chunks for processing
   }
 
   async initialize() {
@@ -33,11 +33,6 @@ class AudioProcessor {
   }
 
   validateFile(file) {
-    // Check file size
-    if (file.size > this.maxFileSize) {
-      throw new Error(`File size exceeds limit of ${this.maxFileSize / (1024 * 1024)}MB`);
-    }
-
     // Check file type
     if (!this.allowedTypes.includes(file.type)) {
       throw new Error('Unsupported file type. Please upload MP4, MOV, MP3, WAV, or M4A files');
@@ -66,13 +61,22 @@ class AudioProcessor {
       // Process in chunks if file is large
       if (file.size > this.processingChunkSize) {
         console.log('[AudioProcessor] Large file detected, processing in chunks...');
-        return await this.processLargeFile(file, outputFileName, onProgress);
+        const blob = await this.processLargeFile(file, outputFileName, onProgress);
+        
+        // Check if the processed file is still too large for server upload
+        if (blob.size > this.maxFileSize) {
+          console.log('[AudioProcessor] Processed file still too large, compressing further...');
+          return await this.compressFurther(blob, onProgress);
+        }
+        
+        return blob;
       }
 
       // For smaller files, process normally
       console.log('[AudioProcessor] Processing file...');
       await this.ffmpeg.writeFile(file.name, await fetchFile(file));
 
+      // First pass - extract audio only
       await this.ffmpeg.exec([
         '-i', file.name,
         '-vn', // No video
@@ -91,13 +95,61 @@ class AudioProcessor {
       await this.ffmpeg.deleteFile(outputFileName);
 
       // Convert to blob
-      const blob = new Blob([data], { type: 'audio/mpeg' });
+      let blob = new Blob([data], { type: 'audio/mpeg' });
+      
+      // Check if the processed file is still too large for server upload
+      if (blob.size > this.maxFileSize) {
+        console.log('[AudioProcessor] Processed file still too large, compressing further...');
+        blob = await this.compressFurther(blob, onProgress);
+      }
       
       console.log('[AudioProcessor] Audio processing complete');
       return blob;
     } catch (error) {
       console.error('[AudioProcessor] Processing error:', error);
       throw new Error(`Failed to process audio file: ${error.message}`);
+    }
+  }
+
+  async compressFurther(blob, onProgress) {
+    try {
+      const tempFileName = `temp_${crypto.randomUUID()}.mp3`;
+      const outputFileName = `compressed_${crypto.randomUUID()}.mp3`;
+      
+      // Write blob to FFmpeg
+      await this.ffmpeg.writeFile(tempFileName, await fetchFile(blob));
+      
+      // Compress with lower bitrate and mono audio
+      await this.ffmpeg.exec([
+        '-i', tempFileName,
+        '-ac', '1', // Mono audio
+        '-acodec', 'libmp3lame',
+        '-ab', '24k', // Very low bitrate
+        '-ar', '16000', // Lower sample rate
+        '-y',
+        outputFileName
+      ]);
+      
+      // Read compressed file
+      const data = await this.ffmpeg.readFile(outputFileName);
+      
+      // Clean up
+      await this.ffmpeg.deleteFile(tempFileName);
+      await this.ffmpeg.deleteFile(outputFileName);
+      
+      // Convert to blob
+      const compressedBlob = new Blob([data], { type: 'audio/mpeg' });
+      console.log(`[AudioProcessor] Further compressed file size: ${Math.round(compressedBlob.size / (1024 * 1024))}MB`);
+      
+      // If still too large, throw error
+      if (compressedBlob.size > this.maxFileSize) {
+        throw new Error(`File is too large (${Math.round(compressedBlob.size / (1024 * 1024))}MB) even after compression. Maximum size is ${Math.round(this.maxFileSize / (1024 * 1024))}MB.`);
+      }
+      
+      return compressedBlob;
+    } catch (error) {
+      console.error('[AudioProcessor] Further compression error:', error);
+      throw error;
     }
   }
 
@@ -111,7 +163,7 @@ class AudioProcessor {
       for (let start = 0; start < file.size; start += this.processingChunkSize) {
         const end = Math.min(start + this.processingChunkSize, file.size);
         const chunk = file.slice(start, end);
-        const chunkName = `chunk_${processedChunks}.mp3`;
+        const chunkName = `chunk_${processedChunks}.mp4`;
 
         // Process chunk
         await this.ffmpeg.writeFile(chunkName, await fetchFile(chunk));
@@ -119,7 +171,7 @@ class AudioProcessor {
           '-i', chunkName,
           '-vn',
           '-acodec', 'libmp3lame',
-          '-ab', '64k',
+          '-ab', '48k',
           '-ar', '22050',
           '-y',
           `processed_${chunkName}`

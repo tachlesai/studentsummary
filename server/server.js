@@ -150,52 +150,31 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
       }
     }
 
-    // Set response headers for streaming
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Transfer-Encoding', 'chunked');
-    
-    // Initialize Gemini API
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
-
-    // Read the processed audio file in chunks
-    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+    // Check file size
     const fileSize = fs.statSync(audioPath).size;
-    const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
+    console.log(`File size: ${Math.round(fileSize / (1024 * 1024))}MB`);
     
-    console.log(`Processing file in ${totalChunks} chunks...`);
-    
-    let audioBase64 = '';
-    const fileStream = fs.createReadStream(audioPath, { highWaterMark: CHUNK_SIZE });
-    
-    for await (const chunk of fileStream) {
-      audioBase64 += chunk.toString('base64');
-      console.log(`Processed ${Math.round(audioBase64.length / 1024 / 1024)}MB of ${Math.round(fileSize / 1024 / 1024)}MB`);
+    // Enforce server-side file size limit
+    if (fileSize > 50 * 1024 * 1024) {
+      throw new Error(`File size exceeds limit of 50MB. Please compress the file further.`);
     }
-
-    // Create the prompt based on style and language
-    const stylePrompt = getStylePrompt(parsedOptions.style || 'detailed');
-    const languagePrompt = getLanguagePrompt(parsedOptions.language || 'he');
-    const prompt = `${stylePrompt}\n\n${languagePrompt}\n\nPlease analyze this audio recording and provide a comprehensive summary.`;
-
-    // Generate content with timeout
-    console.log('Sending request to Gemini API for summarization...');
-    const result = await Promise.race([
-      model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            mimeType: 'audio/mpeg',
-            data: audioBase64
-          }
-        }
-      ]),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Gemini API request timed out')), 300000) // 5 minute timeout
-      )
-    ]);
-
-    const summary = result.response.text();
+    
+    // Process the file with the Gemini API
+    console.log('Processing with Gemini API...');
+    
+    // Use the processAudio function from directAudioProcessor.js
+    const result = await processAudio(audioPath, {
+      onlyTranscribe: false,
+      skipTranscription: false,
+      skipSummarization: false,
+      style: parsedOptions.style || 'detailed',
+      language: parsedOptions.language || 'he'
+    });
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to process audio');
+    }
+    
     console.log('Received summary from Gemini API');
 
     // Save to database
@@ -209,7 +188,7 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
       const values = [
         req.user.email,
         title,
-        summary,
+        result.summary,
         null,
         filename
       ];
@@ -228,7 +207,7 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
     res.json({
       success: true,
       summary: {
-        content: summary,
+        content: result.summary,
         title: title,
         created_at: new Date().toISOString(),
         pdf_path: null,
