@@ -330,204 +330,68 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     if (!genAI) {
       throw new Error('Gemini client not initialized - API key may be missing');
     }
-    
-    // Convert to WAV format
-    const wavFile = await convertToWav(filePath);
-    console.log(`[DirectProcessor] Using WAV file for summarization: ${wavFile}`);
-    
-    // Read file content
-    const fileBuffer = fs.readFileSync(wavFile);
-    console.log(`[DirectProcessor] Audio file size: ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB`);
-    
-    // Create a model instance - using the newer Gemini 2.5 Pro model
+
+    // Get file stats
+    const stats = fs.statSync(filePath);
+    const fileSizeMB = stats.size / (1024 * 1024);
+    console.log(`[DirectProcessor] Audio file size: ${fileSizeMB.toFixed(2)}MB`);
+
+    // Get file extension and mime type
+    const ext = path.extname(filePath).toLowerCase();
+    let mimeType;
+    switch (ext) {
+      case '.mp3':
+        mimeType = 'audio/mpeg';
+        break;
+      case '.mp4':
+        mimeType = 'video/mp4';
+        break;
+      case '.wav':
+        mimeType = 'audio/wav';
+        break;
+      case '.m4a':
+        mimeType = 'audio/mp4';
+        break;
+      default:
+        throw new Error(`Unsupported file format: ${ext}. Supported formats are: MP3, MP4, WAV, M4A`);
+    }
+
+    // Create a model instance
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-exp-03-25" });
     
-    // Get the language from options or default to Hebrew
-    const language = options.language || 'he';
-    
-    // Get the style from options or default to detailed
-    const style = options.style || 'detailed';
-    
-    // Base prompt for all summaries
-    let prompt = `You are an expert educational summarizer. Create a student-friendly summary of the following Hebrew audio recording.`;
-    
-    // Add language-specific instructions
-    switch (language) {
-      case 'en':
-        prompt += `\n\nWrite the summary in English.`;
-        break;
-      case 'he':
-        prompt += `\n\nWrite the summary in Hebrew.`;
-        break;
-      case 'ar':
-        prompt += `\n\nWrite the summary in Arabic.`;
-        break;
-      case 'fr':
-        prompt += `\n\nWrite the summary in French.`;
-        break;
-      case 'ru':
-        prompt += `\n\nWrite the summary in Russian.`;
-        break;
-      default:
-        prompt += `\n\nWrite the summary in Hebrew.`;
-        break;
-    }
+    // Prepare the prompt
+    let prompt = `You are an expert educational summarizer. Create a student-friendly summary of the following audio recording.`;
     
     // Add style-specific instructions
-    switch (style) {
-      case 'concise':
-        prompt += `\n\nCreate a concise summary using clear and concise bullet points. Focus only on the essential concepts, definitions, examples, and key ideas. Group related points where relevant. Each bullet point should capture one core idea in one sentence. Do not add external information or personal interpretation.
-        
-        Formatting for concise style:
-        - Use bullet points (•) for each main point
-        - Group related points under bold headers
-        - Start each bullet with a key term or concept in bold if applicable
-        - Keep each bullet to 1-2 sentences maximum
-        - Use emojis at the start of important points (📌, 🔑, 💡)
-        - End with a "Key Takeaways" section with 3-5 most important points`;
-        break;
-      
-      case 'detailed':
-        prompt += `\n\nWrite a comprehensive and detailed summary that fully captures everything important that was said. Include explanations, definitions, processes, examples, and context, all written in clear and academic language. The goal is for a student to study from your summary as if they had attended the lecture. Structure the text logically, and maintain the same order of topics as in the original lecture.
-        
-        Formatting for detailed style:
-        - Use clear section headers with numbering (1, 2, 3)
-        - Include subsections with decimal numbering (1.1, 1.2, etc.)
-        - Format important definitions in blockquotes or with special formatting
-        - Use tables to organize related information when appropriate
-        - Include "Important Note:" sections for critical information
-        - End with a "Summary of Key Points" section`;
-        break;
-      
-      case 'narrative':
-        prompt += `\n\nGenerate a brief narrative summary of the key ideas. Keep it to one or two well-structured paragraphs. Avoid excessive detail, and focus on delivering a readable, fluent overview of the main arguments, themes, or ideas. Use full sentences – do not use bullet points.
-        
-        Formatting for narrative style:
-        - Write in flowing paragraphs with clear topic sentences
-        - Use italics for emphasis on key terms or concepts
-        - Keep to 2-3 paragraphs maximum
-        - Use transition words between ideas (furthermore, however, therefore)
-        - Focus on the relationships between concepts
-        - End with a concluding sentence that captures the main point`;
-        break;
-      
-      case 'thematic':
-        prompt += `\n\nSummarize the content by dividing it into thematic sections or topic-based headers. Under each section, write a concise summary of the relevant material. Focus on clarity and structure. Ensure that all major areas covered in the lecture are represented. This is helpful for students who want to focus on specific parts of the lecture later.
-        
-        Formatting for thematic style:
-        - Use clear, descriptive section headers with emoji icons
-        - Start each section with a one-sentence overview
-        - Include 3-5 bullet points under each section
-        - Use bold text for key concepts in each section
-        - Add a "Connection" note at the end of each section showing how it relates to other sections
-        - End with a "Themes Overview" that lists all major themes`;
-        break;
-      
-      case 'qa':
-        prompt += `\n\nExtract important information and convert it into a Q&A format suitable for student practice and revision. Each question should address a major topic or key concept mentioned in the lecture. Provide clear and direct answers based strictly on the content of the lecture. Do not invent or assume additional information. Aim for around 5–15 question-answer pairs, depending on the amount of material covered.
-        
-        Formatting for Q&A style:
-        - Format questions in bold and numbered (Q1, Q2, etc.)
-        - Group questions by topic with clear section headers
-        - Keep questions clear and specific
-        - Format answers in plain text below each question
-        - Include "Why it matters:" after important answers
-        - End with 2-3 "Review Questions" that require synthesizing multiple concepts`;
-        break;
-      
-      case 'glossary':
-        prompt += `\n\nExtract a list of important terms and their definitions as presented or implied by the speaker. Only include terms that were explicitly mentioned or explained. For each term, provide a short and clear definition that reflects the context of the lecture. Format as a glossary-style list.
-        
-        Formatting for glossary style:
-        - Format terms in bold and alphabetical order
-        - Provide clear, concise definitions (1-3 sentences)
-        - Include context or examples where mentioned
-        - Mark key terms with a star (★) symbol
-        - Group related terms under category headers if appropriate
-        - Include "See also:" references to related terms
-        - End with a "Core Concepts" section listing 5-7 most important terms`;
-        break;
-      
-      case 'steps':
-        prompt += `\n\nIdentify any processes, methods, workflows, or step-based explanations. Summarize them clearly as a numbered list of steps, maintaining the logical sequence as presented in the lecture. This summary should help a student understand the "how" or "in what order" of the discussed content.
-        
-        Formatting for steps style:
-        - Use clear numbered steps (Step 1, Step 2, etc.)
-        - Start each step with an action verb
-        - Include a brief explanation for each step
-        - Add notes or warnings for tricky steps
-        - Use arrows (→) to show the flow between steps
-        - Include a "Before you begin" section if appropriate
-        - End with a "Common Mistakes" section`;
-        break;
-      
-      case 'tldr':
-        prompt += `\n\nWrite a one-sentence summary that captures the core purpose or insight of the lecture in the simplest and clearest way possible. This should help a student quickly understand what the lecture was mainly about. Then add 3-5 bullet points with the key supporting ideas.
-        
-        Formatting for TLDR style:
-        - Start with a single, bold sentence summary (maximum 25 words)
-        - Follow with 3-5 short bullet points of supporting details
-        - Use emojis to highlight the main categories of information
-        - Keep the entire summary under 150 words
-        - Focus only on the absolute most important concepts
-        - End with a "Why this matters:" single sentence`;
-        break;
-      
-      default:
-        // Default to detailed summary
-        prompt += `\n\nWrite a comprehensive and detailed summary that fully captures everything important that was said. Include explanations, definitions, processes, examples, and context, all written in clear and academic language. The goal is for a student to study from your summary as if they had attended the lecture. Structure the text logically, and maintain the same order of topics as in the original lecture.
-        
-        Formatting for detailed style:
-        - Use clear section headers with numbering (1, 2, 3)
-        - Include subsections with decimal numbering (1.1, 1.2, etc.)
-        - Format important definitions in blockquotes or with special formatting
-        - Use tables to organize related information when appropriate
-        - Include "Important Note:" sections for critical information
-        - End with a "Summary of Key Points" section`;
-    }
+    prompt += getStyleSpecificPrompt(options.style);
     
-    // Add general formatting guidelines
-    prompt += `\n\nGeneral formatting guidelines:
-    - Use clear, simple language that students can understand
-    - Break down complex ideas into easy-to-understand points
-    - Focus on the most important concepts
-    - Explain difficult terms in simple language
-    - Include relevant examples that help understanding
-    - Highlight key definitions and formulas
-    - Add study tips or memory aids where helpful`;
+    // Add language preference
+    prompt += getLanguageSpecificPrompt(options.language);
     
-    // Add emojis and formatting based on style
-    if (style !== 'narrative' && style !== 'tldr') {
-      prompt += `\n\nUse appropriate formatting:
-      - Use emojis or symbols to highlight important points (📝 for notes, 💡 for tips, ⭐ for key points)
-      - Include "Key Points" sections where appropriate
-      - Add "Remember" boxes for important information`;
-    }
-    
-    prompt += `\n\nPlease summarize the following audio recording following these guidelines.`;
-    
-    console.log(`[DirectProcessor] Using summary style: ${style}`);
     console.log(`[DirectProcessor] Sending request to Gemini API for summarization...`);
+    
+    // Read file in chunks to manage memory
+    const fileStream = fs.createReadStream(filePath);
+    const chunks = [];
+    
+    for await (const chunk of fileStream) {
+      chunks.push(chunk);
+    }
+    
+    const fileBuffer = Buffer.concat(chunks);
     
     // Send to Gemini API
     const result = await model.generateContent([
       prompt,
       {
         inlineData: {
-          mimeType: "audio/wav",
+          mimeType: mimeType,
           data: fileBuffer.toString('base64')
         }
       }
     ]);
-    console.log(`[DirectProcessor] Received response from Gemini API for summarization`);
     
-    // Clean up the temporary WAV file
-    try {
-      fs.unlinkSync(wavFile);
-      console.log(`[DirectProcessor] Cleaned up temporary WAV file`);
-    } catch (cleanupError) {
-      console.error(`[DirectProcessor] Failed to clean up WAV file:`, cleanupError);
-    }
+    console.log(`[DirectProcessor] Received response from Gemini API for summarization`);
     
     // Extract summary
     const summary = result.response.text();
@@ -536,7 +400,6 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     return summary;
   } catch (error) {
     console.error(`[DirectProcessor] Summarization error:`, error);
-    // Log more details about the error
     if (error.response) {
       console.error(`[DirectProcessor] Error response:`, {
         status: error.response.status,
@@ -680,65 +543,36 @@ async function callGeminiWithRetry(fn, ...args) {
  * @param {object} options - Processing options
  * @returns {Promise<object>} - Processing results
  */
-export async function processAudio(filePath, options = {}) {
-  console.log(`[DirectProcessor] Starting direct audio processing: ${filePath}`);
-  console.log(`[DirectProcessor] Options:`, options);
-  
-  // Log the summary style if provided
-  if (options.style) {
-    console.log(`[DirectProcessor] Summary style: ${options.style}`);
-  }
-
-  const filesToCleanup = []; // Track all files created during processing
-  let wavFile = null;
-  
+async function processAudio(filePath, options = {}) {
   try {
-    // Step 1: Check if file exists
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`File does not exist: ${filePath}`);
-    }
-
-    // Step 2: Check if only transcription is requested
-    if (options.onlyTranscribe) {
-      const transcript = await transcribeWithGemini(filePath);
-      
-      // The transcribeWithGemini function already cleans up its WAV file
-      // We can also clean up any debug files
-      await cleanupAllFiles([], { cleanDebugFiles: true });
-      
-      return {
-        success: true,
-        transcript,
-        summary: null, // No summarization needed
-        style: options.style // Include the style in the response
-      };
-    }
-
-    // Step 3: Directly summarize the audio file
-    const summary = await summarizeAudioWithGemini(filePath, options);
+    console.log(`[DirectProcessor] Processing audio file: ${filePath}`);
     
-    // Clean up any debug files
-    await cleanupAllFiles([], { cleanDebugFiles: true });
+    // Get file stats
+    const stats = fs.statSync(filePath);
+    const fileSizeMB = stats.size / (1024 * 1024);
+    console.log(`[DirectProcessor] File size: ${fileSizeMB.toFixed(2)}MB`);
 
+    // Get file extension
+    const ext = path.extname(filePath).toLowerCase();
+    if (!['.mp3', '.mp4', '.wav', '.m4a'].includes(ext)) {
+      throw new Error(`Unsupported file format: ${ext}. Supported formats are: MP3, MP4, WAV, M4A`);
+    }
+
+    // Log the summary style if provided
+    if (options.style) {
+      console.log(`[DirectProcessor] Summary style: ${options.style}`);
+    }
+
+    // Process the audio file
+    const summary = await summarizeAudioWithGemini(filePath, options);
     return {
-      success: true,
       summary,
-      transcript: null, // No transcription needed
-      style: options.style // Include the style in the response
+      style: options.style || 'detailed',
+      language: options.language || 'he'
     };
   } catch (error) {
-    console.error(`[DirectProcessor] Error processing audio:`, error);
-    
-    // Attempt to clean up any files that might have been created
-    if (filesToCleanup.length > 0) {
-      await cleanupAllFiles(filesToCleanup, { cleanDebugFiles: true });
-    }
-    
-    return {
-      success: false,
-      error: error.message,
-      style: options.style // Include the style even in error case
-    };
+    console.error(`[DirectProcessor] Processing error:`, error);
+    throw error;
   }
 }
 
