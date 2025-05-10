@@ -11,6 +11,7 @@ import { promisify } from 'util';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import { encode } from 'gpt-3-encoder';
+import { Transform } from 'stream';
 
 // Promisify exec
 const execAsync = promisify(exec);
@@ -344,17 +345,18 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     // If it's a video file, extract the audio first
     if (ext === '.mp4') {
       console.log(`[DirectProcessor] Extracting audio from video file...`);
-      const audioExt = '.m4a';
+      const audioExt = '.opus'; // Use OPUS codec for better compression
       audioFilePath = filePath.replace(ext, audioExt);
       
-      // Use ffmpeg to extract audio
+      // Use ffmpeg to extract audio with more aggressive compression
       await new Promise((resolve, reject) => {
         const ffmpeg = spawn('ffmpeg', [
           '-i', filePath,
           '-vn', // No video
-          '-acodec', 'aac', // Use AAC codec
-          '-ab', '64k', // Lower bitrate (64kbps is fine for speech)
-          '-ar', '22050', // Lower sample rate (22.05kHz is fine for speech)
+          '-acodec', 'libopus', // Use OPUS codec
+          '-b:a', '32k', // Lower bitrate (32kbps is enough for speech)
+          '-ar', '16000', // Lower sample rate (16kHz is enough for speech)
+          '-ac', '1', // Mono audio
           '-loglevel', 'error', // Only show errors
           audioFilePath
         ]);
@@ -388,7 +390,7 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
         throw new Error(`Extracted audio file is too large (${audioSizeMB.toFixed(2)}MB). Maximum size is 100MB.`);
       }
       
-      mimeType = 'audio/mp4';
+      mimeType = 'audio/ogg'; // OPUS files use OGG container
     } else {
       // Handle other audio formats
       switch (ext) {
@@ -401,8 +403,11 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
         case '.m4a':
           mimeType = 'audio/mp4';
           break;
+        case '.opus':
+          mimeType = 'audio/ogg';
+          break;
         default:
-          throw new Error(`Unsupported file format: ${ext}. Supported formats are: MP3, MP4, WAV, M4A`);
+          throw new Error(`Unsupported file format: ${ext}. Supported formats are: MP3, MP4, WAV, M4A, OPUS`);
       }
     }
 
@@ -420,32 +425,78 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     
     console.log(`[DirectProcessor] Sending request to Gemini API for summarization...`);
     
-    // Read the entire file into a buffer
-    const fileBuffer = fs.readFileSync(audioFilePath);
-    console.log(`[DirectProcessor] Read file into memory: ${(fileBuffer.length / (1024 * 1024)).toFixed(2)}MB`);
+    // Read file in chunks and convert to base64
+    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+    let totalBytesRead = 0;
     
-    // Convert to base64
-    const base64Data = fileBuffer.toString('base64');
-    console.log(`[DirectProcessor] Converted to base64: ${(base64Data.length / (1024 * 1024)).toFixed(2)}MB`);
+    // Create a readable stream for the file
+    const fileStream = fs.createReadStream(audioFilePath, { highWaterMark: CHUNK_SIZE });
     
-    // Log memory usage
-    const used = process.memoryUsage();
-    console.log(`[DirectProcessor] Memory usage:
-      - Heap Total: ${(used.heapTotal / 1024 / 1024).toFixed(2)}MB
-      - Heap Used: ${(used.heapUsed / 1024 / 1024).toFixed(2)}MB
-      - RSS: ${(used.rss / 1024 / 1024).toFixed(2)}MB
-      - External: ${(used.external / 1024 / 1024).toFixed(2)}MB`);
-    
-    // Send to Gemini API
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          mimeType: mimeType,
-          data: base64Data
-        }
+    // Create a transform stream to convert chunks to base64
+    const base64Stream = new Transform({
+      transform(chunk, encoding, callback) {
+        const base64Chunk = chunk.toString('base64');
+        totalBytesRead += chunk.length;
+        
+        // Log progress
+        console.log(`[DirectProcessor] Processed ${(totalBytesRead / (1024 * 1024)).toFixed(2)}MB of ${(fs.statSync(audioFilePath).size / (1024 * 1024)).toFixed(2)}MB`);
+        
+        // Log memory usage
+        const used = process.memoryUsage();
+        console.log(`[DirectProcessor] Current memory usage:
+          - Heap Total: ${(used.heapTotal / 1024 / 1024).toFixed(2)}MB
+          - Heap Used: ${(used.heapUsed / 1024 / 1024).toFixed(2)}MB
+          - RSS: ${(used.rss / 1024 / 1024).toFixed(2)}MB
+          - External: ${(used.external / 1024 / 1024).toFixed(2)}MB`);
+        
+        callback(null, base64Chunk);
       }
-    ]);
+    });
+    
+    // Create a buffer to accumulate base64 data
+    let base64Buffer = Buffer.alloc(0);
+    
+    // Process the file in chunks
+    for await (const chunk of fileStream.pipe(base64Stream)) {
+      // Append chunk to buffer
+      base64Buffer = Buffer.concat([base64Buffer, Buffer.from(chunk)]);
+      
+      // If buffer is large enough, send to Gemini
+      if (base64Buffer.length >= CHUNK_SIZE) {
+        const chunkToSend = base64Buffer.slice(0, CHUNK_SIZE);
+        base64Buffer = base64Buffer.slice(CHUNK_SIZE);
+        
+        // Send chunk to Gemini
+        await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: chunkToSend.toString()
+            }
+          }
+        ]);
+      }
+    }
+    
+    // Send any remaining data
+    if (base64Buffer.length > 0) {
+      await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Buffer.toString()
+          }
+        }
+      ]);
+    }
+    
+    console.log(`[DirectProcessor] Total processed: ${(totalBytesRead / (1024 * 1024)).toFixed(2)}MB`);
+    
+    // Free up memory
+    base64Buffer = null;
+    global.gc && global.gc(); // Force garbage collection if available
     
     console.log(`[DirectProcessor] Received response from Gemini API for summarization`);
     
