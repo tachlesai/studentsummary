@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { processAudio, cleanupAllFiles } from './Transcribe_and_summarize/directAudioProcessor.js';
 import db from './db.js';
 import bcrypt from 'bcryptjs';
+import { GoogleGenerativeAI } from './GoogleGenerativeAI.js';
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -129,7 +130,7 @@ const flexibleUpload = (req, res, next) => {
 // Process audio endpoint - for file uploads
 app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => {
   try {
-    console.log(`Processing audio file: ${req.file.path}`);
+    console.log(`Received processed audio file: ${req.file.path}`);
     
     // Extract filename without extension for title
     const filename = path.basename(req.file.originalname);
@@ -145,64 +146,74 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
         console.error('Error parsing options:', e);
       }
     }
-    
-    // Get processing options from request
-    const options = {
-      onlyTranscribe: parsedOptions.outputType === 'transcript',
-      skipTranscription: false,
-      skipSummarization: parsedOptions.outputType === 'transcript',
-      style: parsedOptions.style || 'detailed', // Include the summary style
-      language: parsedOptions.language || 'he'
-    };
-    
-    console.log('Processing options:', options);
 
-    // Process the audio file
-    const result = await processAudio(req.file.path, options);
+    // Get the processed audio file path
+    const audioPath = req.file.path;
     
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to process audio');
-    }
+    // Initialize Gemini API
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
 
-    // Prepare response data based on output type
-    const responseData = {
-      title: title,
-      content: parsedOptions.outputType === 'transcript' ? result.transcript : result.summary,
-      transcription: result.transcript,
-      pdfPath: null, // PDF generation will be handled separately if needed
-      style: result.style || options.style // Include the summary style in the response
-    };
+    // Read the processed audio file
+    const audioData = fs.readFileSync(audioPath);
+    const audioBase64 = audioData.toString('base64');
 
-    // Save to database if we have content
-    if (responseData.content) {
-      try {
-        const query = `
-          INSERT INTO summaries (user_email, title, summary, pdf_path, file_name, created_at)
-          VALUES ($1, $2, $3, $4, $5, NOW())
-          RETURNING id
-        `;
-        
-        const values = [
-          req.user.email,
-          responseData.title,
-          responseData.content,
-          responseData.pdfPath,
-          filename // Use the original filename
-        ];
-        
-        const dbResult = await db.query(query, values);
-        console.log(`Summary saved to database with ID: ${dbResult.rows[0].id}`);
-      } catch (dbError) {
-        console.error('Database error:', dbError);
-        // Continue with the response even if database save fails
+    // Create the prompt based on style and language
+    const stylePrompt = getStylePrompt(parsedOptions.style || 'detailed');
+    const languagePrompt = getLanguagePrompt(parsedOptions.language || 'he');
+    const prompt = `${stylePrompt}\n\n${languagePrompt}\n\nPlease analyze this audio recording and provide a comprehensive summary.`;
+
+    // Generate content
+    console.log('Sending request to Gemini API for summarization...');
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          mimeType: 'audio/mpeg',
+          data: audioBase64
+        }
       }
+    ]);
+
+    const summary = result.response.text();
+    console.log('Received summary from Gemini API');
+
+    // Save to database
+    try {
+      const query = `
+        INSERT INTO summaries (user_email, title, summary, pdf_path, file_name, created_at)
+        VALUES ($1, $2, $3, $4, $5, NOW())
+        RETURNING id
+      `;
+      
+      const values = [
+        req.user.email,
+        title,
+        summary,
+        null,
+        filename
+      ];
+      
+      const dbResult = await db.query(query, values);
+      console.log(`Summary saved to database with ID: ${dbResult.rows[0].id}`);
+    } catch (dbError) {
+      console.error('Database error:', dbError);
     }
 
-    // Use the comprehensive cleanup function to clean up the uploaded file
-    // This will also clean up any temporary files older than 1 hour
-    await cleanupAllFiles([req.file.path], { cleanDebugFiles: true });
+    // Clean up the uploaded file
+    await cleanupAllFiles([audioPath], { cleanDebugFiles: true });
 
-    res.json(responseData);
+    res.json({
+      success: true,
+      summary: {
+        content: summary,
+        title: title,
+        created_at: new Date().toISOString(),
+        pdf_path: null,
+        file_name: filename,
+        style: parsedOptions.style || 'detailed'
+      }
+    });
   } catch (error) {
     console.error('Error processing audio:', error);
     
@@ -214,6 +225,31 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
     res.status(500).json({ error: error.message });
   }
 });
+
+// Helper functions for prompts
+function getStylePrompt(style) {
+  switch (style) {
+    case 'detailed':
+      return 'Please provide a detailed summary that captures all key points, main arguments, and important details from the recording. Include specific examples and quotes when relevant.';
+    case 'concise':
+      return 'Please provide a concise summary focusing on the main points and key takeaways. Keep it brief but informative.';
+    case 'bullet':
+      return 'Please provide a bullet-point summary highlighting the main topics, key points, and important details.';
+    default:
+      return 'Please provide a detailed summary of the recording.';
+  }
+}
+
+function getLanguagePrompt(language) {
+  switch (language) {
+    case 'he':
+      return 'Please provide the summary in Hebrew.';
+    case 'en':
+      return 'Please provide the summary in English.';
+    default:
+      return 'Please provide the summary in Hebrew.';
+  }
+}
 
 // Process recording endpoint - for direct audio recordings
 app.post('/api/process-recording', async (req, res) => {
