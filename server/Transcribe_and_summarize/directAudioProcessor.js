@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
@@ -339,21 +339,60 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     // Get file extension and mime type
     const ext = path.extname(filePath).toLowerCase();
     let mimeType;
-    switch (ext) {
-      case '.mp3':
-        mimeType = 'audio/mpeg';
-        break;
-      case '.mp4':
-        mimeType = 'video/mp4';
-        break;
-      case '.wav':
-        mimeType = 'audio/wav';
-        break;
-      case '.m4a':
-        mimeType = 'audio/mp4';
-        break;
-      default:
-        throw new Error(`Unsupported file format: ${ext}. Supported formats are: MP3, MP4, WAV, M4A`);
+    let audioFilePath = filePath;
+
+    // If it's a video file, extract the audio first
+    if (ext === '.mp4') {
+      console.log(`[DirectProcessor] Extracting audio from video file...`);
+      const audioExt = '.mp3';
+      audioFilePath = filePath.replace(ext, audioExt);
+      
+      // Use ffmpeg to extract audio
+      await new Promise((resolve, reject) => {
+        const ffmpeg = spawn('ffmpeg', [
+          '-i', filePath,
+          '-vn', // No video
+          '-acodec', 'libmp3lame', // Use MP3 codec
+          '-ab', '128k', // Audio bitrate
+          '-ar', '44100', // Sample rate
+          audioFilePath
+        ]);
+
+        ffmpeg.stderr.on('data', (data) => {
+          console.log(`[DirectProcessor] FFmpeg: ${data}`);
+        });
+
+        ffmpeg.on('close', (code) => {
+          if (code === 0) {
+            console.log(`[DirectProcessor] Audio extraction complete`);
+            resolve();
+          } else {
+            reject(new Error(`FFmpeg process exited with code ${code}`));
+          }
+        });
+      });
+
+      // Get the new file size
+      const audioStats = fs.statSync(audioFilePath);
+      const audioSizeMB = audioStats.size / (1024 * 1024);
+      console.log(`[DirectProcessor] Extracted audio size: ${audioSizeMB.toFixed(2)}MB`);
+      
+      mimeType = 'audio/mpeg';
+    } else {
+      // Handle other audio formats
+      switch (ext) {
+        case '.mp3':
+          mimeType = 'audio/mpeg';
+          break;
+        case '.wav':
+          mimeType = 'audio/wav';
+          break;
+        case '.m4a':
+          mimeType = 'audio/mp4';
+          break;
+        default:
+          throw new Error(`Unsupported file format: ${ext}. Supported formats are: MP3, MP4, WAV, M4A`);
+      }
     }
 
     // Create a model instance
@@ -371,13 +410,23 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     console.log(`[DirectProcessor] Sending request to Gemini API for summarization...`);
     
     // Read file in chunks to manage memory
-    const fileStream = fs.createReadStream(filePath);
+    const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
+    const fileStream = fs.createReadStream(audioFilePath, { highWaterMark: CHUNK_SIZE });
     const chunks = [];
+    let totalBytes = 0;
     
+    // Process the file in chunks
     for await (const chunk of fileStream) {
       chunks.push(chunk);
+      totalBytes += chunk.length;
+      
+      // Log progress every 10MB
+      if (totalBytes % (10 * 1024 * 1024) === 0) {
+        console.log(`[DirectProcessor] Processed ${(totalBytes / (1024 * 1024)).toFixed(2)}MB of ${(stats.size / (1024 * 1024)).toFixed(2)}MB`);
+      }
     }
     
+    // Combine chunks into a single buffer
     const fileBuffer = Buffer.concat(chunks);
     
     // Send to Gemini API
@@ -396,6 +445,12 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     // Extract summary
     const summary = result.response.text();
     console.log(`[DirectProcessor] Summarization successful: ${summary.length} characters, ${summary.split(' ').length} words`);
+    
+    // Clean up extracted audio file if it was created
+    if (audioFilePath !== filePath) {
+      fs.unlinkSync(audioFilePath);
+      console.log(`[DirectProcessor] Cleaned up extracted audio file: ${audioFilePath}`);
+    }
     
     return summary;
   } catch (error) {
