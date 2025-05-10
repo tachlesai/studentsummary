@@ -344,7 +344,7 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     // If it's a video file, extract the audio first
     if (ext === '.mp4') {
       console.log(`[DirectProcessor] Extracting audio from video file...`);
-      const audioExt = '.mp3';
+      const audioExt = '.m4a';
       audioFilePath = filePath.replace(ext, audioExt);
       
       // Use ffmpeg to extract audio
@@ -352,7 +352,7 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
         const ffmpeg = spawn('ffmpeg', [
           '-i', filePath,
           '-vn', // No video
-          '-acodec', 'aac', // Use AAC codec (faster than MP3)
+          '-acodec', 'aac', // Use AAC codec
           '-ab', '64k', // Lower bitrate (64kbps is fine for speech)
           '-ar', '22050', // Lower sample rate (22.05kHz is fine for speech)
           '-loglevel', 'error', // Only show errors
