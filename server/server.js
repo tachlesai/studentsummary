@@ -129,8 +129,11 @@ const flexibleUpload = (req, res, next) => {
 
 // Process audio endpoint - for file uploads
 app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => {
+  let audioPath = null;
+  
   try {
     console.log(`Received processed audio file: ${req.file.path}`);
+    audioPath = req.file.path;
     
     // Extract filename without extension for title
     const filename = path.basename(req.file.originalname);
@@ -147,32 +150,49 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
       }
     }
 
-    // Get the processed audio file path
-    const audioPath = req.file.path;
+    // Set response headers for streaming
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Transfer-Encoding', 'chunked');
     
     // Initialize Gemini API
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
 
-    // Read the processed audio file
-    const audioData = fs.readFileSync(audioPath);
-    const audioBase64 = audioData.toString('base64');
+    // Read the processed audio file in chunks
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+    const fileSize = fs.statSync(audioPath).size;
+    const totalChunks = Math.ceil(fileSize / CHUNK_SIZE);
+    
+    console.log(`Processing file in ${totalChunks} chunks...`);
+    
+    let audioBase64 = '';
+    const fileStream = fs.createReadStream(audioPath, { highWaterMark: CHUNK_SIZE });
+    
+    for await (const chunk of fileStream) {
+      audioBase64 += chunk.toString('base64');
+      console.log(`Processed ${Math.round(audioBase64.length / 1024 / 1024)}MB of ${Math.round(fileSize / 1024 / 1024)}MB`);
+    }
 
     // Create the prompt based on style and language
     const stylePrompt = getStylePrompt(parsedOptions.style || 'detailed');
     const languagePrompt = getLanguagePrompt(parsedOptions.language || 'he');
     const prompt = `${stylePrompt}\n\n${languagePrompt}\n\nPlease analyze this audio recording and provide a comprehensive summary.`;
 
-    // Generate content
+    // Generate content with timeout
     console.log('Sending request to Gemini API for summarization...');
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          mimeType: 'audio/mpeg',
-          data: audioBase64
+    const result = await Promise.race([
+      model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            mimeType: 'audio/mpeg',
+            data: audioBase64
+          }
         }
-      }
+      ]),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Gemini API request timed out')), 300000) // 5 minute timeout
+      )
     ]);
 
     const summary = result.response.text();
@@ -198,11 +218,13 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
       console.log(`Summary saved to database with ID: ${dbResult.rows[0].id}`);
     } catch (dbError) {
       console.error('Database error:', dbError);
+      // Continue with the response even if database save fails
     }
 
     // Clean up the uploaded file
     await cleanupAllFiles([audioPath], { cleanDebugFiles: true });
 
+    // Send response
     res.json({
       success: true,
       summary: {
@@ -218,11 +240,16 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
     console.error('Error processing audio:', error);
     
     // Still try to clean up even if there was an error
-    if (req.file && req.file.path) {
-      await cleanupAllFiles([req.file.path], { cleanDebugFiles: true });
+    if (audioPath) {
+      await cleanupAllFiles([audioPath], { cleanDebugFiles: true });
     }
     
-    res.status(500).json({ error: error.message });
+    // Send error response
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to process audio file',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
