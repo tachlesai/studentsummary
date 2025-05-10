@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { processAudio, cleanupAllFiles } from './Transcribe_and_summarize/directAudioProcessor.js';
 import db from './db.js';
 import bcrypt from 'bcryptjs';
-import { GoogleGenerativeAI } from './GoogleGenerativeAI.js';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const app = express();
 const port = process.env.PORT || 5001;
