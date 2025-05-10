@@ -11,7 +11,6 @@ import { promisify } from 'util';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 import { encode } from 'gpt-3-encoder';
-import { Transform } from 'stream';
 
 // Promisify exec
 const execAsync = promisify(exec);
@@ -331,7 +330,7 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     if (!genAI) {
       throw new Error('Gemini client not initialized - API key may be missing');
     }
-
+    
     // Get file stats
     const stats = fs.statSync(filePath);
     const fileSizeMB = stats.size / (1024 * 1024);
@@ -345,18 +344,17 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     // If it's a video file, extract the audio first
     if (ext === '.mp4') {
       console.log(`[DirectProcessor] Extracting audio from video file...`);
-      const audioExt = '.opus'; // Use OPUS codec for better compression
+      const audioExt = '.mp3';
       audioFilePath = filePath.replace(ext, audioExt);
       
-      // Use ffmpeg to extract audio with more aggressive compression
+      // Use ffmpeg to extract audio
       await new Promise((resolve, reject) => {
         const ffmpeg = spawn('ffmpeg', [
           '-i', filePath,
           '-vn', // No video
-          '-acodec', 'libopus', // Use OPUS codec
-          '-b:a', '32k', // Lower bitrate (32kbps is enough for speech)
-          '-ar', '16000', // Lower sample rate (16kHz is enough for speech)
-          '-ac', '1', // Mono audio
+          '-acodec', 'libmp3lame', // Use MP3 codec
+          '-ab', '128k', // Audio bitrate
+          '-ar', '44100', // Sample rate
           '-loglevel', 'error', // Only show errors
           audioFilePath
         ]);
@@ -385,12 +383,7 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
       const audioSizeMB = audioStats.size / (1024 * 1024);
       console.log(`[DirectProcessor] Extracted audio size: ${audioSizeMB.toFixed(2)}MB`);
       
-      // Check if the extracted audio is too large
-      if (audioSizeMB > 100) {
-        throw new Error(`Extracted audio file is too large (${audioSizeMB.toFixed(2)}MB). Maximum size is 100MB.`);
-      }
-      
-      mimeType = 'audio/ogg'; // OPUS files use OGG container
+      mimeType = 'audio/mpeg';
     } else {
       // Handle other audio formats
       switch (ext) {
@@ -403,11 +396,8 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
         case '.m4a':
           mimeType = 'audio/mp4';
           break;
-        case '.opus':
-          mimeType = 'audio/ogg';
-          break;
         default:
-          throw new Error(`Unsupported file format: ${ext}. Supported formats are: MP3, MP4, WAV, M4A, OPUS`);
+          throw new Error(`Unsupported file format: ${ext}. Supported formats are: MP3, MP4, WAV, M4A`);
       }
     }
 
@@ -425,112 +415,36 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     
     console.log(`[DirectProcessor] Sending request to Gemini API for summarization...`);
     
-    // Read file in chunks and convert to base64
-    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
-    let totalBytesRead = 0;
-    
-    // Create a readable stream for the file
+    // Read file in chunks to manage memory
+    const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
     const fileStream = fs.createReadStream(audioFilePath, { highWaterMark: CHUNK_SIZE });
-    
-    // Create a transform stream to convert chunks to base64
-    const base64Stream = new Transform({
-      transform(chunk, encoding, callback) {
-        const base64Chunk = chunk.toString('base64');
-        totalBytesRead += chunk.length;
-        
-        // Log progress
-        console.log(`[DirectProcessor] Processed ${(totalBytesRead / (1024 * 1024)).toFixed(2)}MB of ${(fs.statSync(audioFilePath).size / (1024 * 1024)).toFixed(2)}MB`);
-        
-        // Log memory usage
-        const used = process.memoryUsage();
-        console.log(`[DirectProcessor] Current memory usage:
-          - Heap Total: ${(used.heapTotal / 1024 / 1024).toFixed(2)}MB
-          - Heap Used: ${(used.heapUsed / 1024 / 1024).toFixed(2)}MB
-          - RSS: ${(used.rss / 1024 / 1024).toFixed(2)}MB
-          - External: ${(used.external / 1024 / 1024).toFixed(2)}MB`);
-        
-        callback(null, base64Chunk);
-      }
-    });
-    
-    // Create a buffer to accumulate base64 data
-    let base64Buffer = Buffer.alloc(0);
+    const chunks = [];
+    let totalBytes = 0;
     
     // Process the file in chunks
-    for await (const chunk of fileStream.pipe(base64Stream)) {
-      try {
-        // Append chunk to buffer
-        base64Buffer = Buffer.concat([base64Buffer, Buffer.from(chunk)]);
-        
-        // If buffer is large enough, send to Gemini
-        if (base64Buffer.length >= CHUNK_SIZE) {
-          const chunkToSend = base64Buffer.slice(0, CHUNK_SIZE);
-          base64Buffer = base64Buffer.slice(CHUNK_SIZE);
-          
-          // Ensure the chunk is properly Base64 encoded
-          const base64Data = chunkToSend.toString('base64');
-          
-          // Validate Base64 string
-          if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64Data)) {
-            throw new Error('Invalid Base64 encoding detected');
-          }
-          
-          // Send chunk to Gemini
-          const result = await model.generateContent([
-            prompt,
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Data
-              }
-            }
-          ]);
-          
-          // Store the result for later use
-          if (!result) {
-            throw new Error('No response received from Gemini API');
-          }
-        }
-      } catch (error) {
-        console.error(`[DirectProcessor] Error processing chunk:`, error);
-        throw new Error(`Failed to process audio chunk: ${error.message}`);
+    for await (const chunk of fileStream) {
+      chunks.push(chunk);
+      totalBytes += chunk.length;
+      
+      // Log progress every 10MB
+      if (totalBytes % (10 * 1024 * 1024) === 0) {
+        console.log(`[DirectProcessor] Processed ${(totalBytes / (1024 * 1024)).toFixed(2)}MB of ${(stats.size / (1024 * 1024)).toFixed(2)}MB`);
       }
     }
     
-    // Send any remaining data
-    if (base64Buffer.length > 0) {
-      try {
-        const base64Data = base64Buffer.toString('base64');
-        
-        // Validate Base64 string
-        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64Data)) {
-          throw new Error('Invalid Base64 encoding detected in final chunk');
+    // Combine chunks into a single buffer
+    const fileBuffer = Buffer.concat(chunks);
+    
+    // Send to Gemini API
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          mimeType: mimeType,
+          data: fileBuffer.toString('base64')
         }
-        
-        const result = await model.generateContent([
-          prompt,
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Data
-            }
-          }
-        ]);
-        
-        if (!result) {
-          throw new Error('No response received from Gemini API for final chunk');
-        }
-      } catch (error) {
-        console.error(`[DirectProcessor] Error processing final chunk:`, error);
-        throw new Error(`Failed to process final audio chunk: ${error.message}`);
       }
-    }
-    
-    console.log(`[DirectProcessor] Total processed: ${(totalBytesRead / (1024 * 1024)).toFixed(2)}MB`);
-    
-    // Free up memory
-    base64Buffer = null;
-    global.gc && global.gc(); // Force garbage collection if available
+    ]);
     
     console.log(`[DirectProcessor] Received response from Gemini API for summarization`);
     

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { processAudio, cleanupAllFiles } from './Transcribe_and_summarize/directAudioProcessor.js';
 import db from './db.js';
 import bcrypt from 'bcryptjs';
+import { summarizeAudioWithGemini } from './Transcribe_and_summarize/summarizeAudioWithGemini.js';
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -880,3 +881,38 @@ const server = app.listen(port, () => {
 // Schedule cleanup job to run every hour - this will clean up any temporary files
 // that may have been left behind
 const cleanupJob = setInterval(cleanupOldTempFiles, 60 * 60 * 1000); // 1 hour
+
+// Update the summarize endpoint
+app.post('/api/summarize', multer().single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Validate file type
+    const allowedTypes = ['audio/mpeg', 'audio/mp3'];
+    if (!allowedTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({ error: 'Invalid file type. Only processed audio files are allowed.' });
+    }
+
+    // Validate file size (max 100MB for processed files)
+    const maxSize = 100 * 1024 * 1024; // 100MB
+    if (req.file.size > maxSize) {
+      return res.status(400).json({ error: 'File too large. Maximum size is 100MB.' });
+    }
+
+    // Get summary style and language from request
+    const { style = 'detailed', language = 'hebrew' } = req.body;
+
+    // Process the audio file
+    const summary = await summarizeAudioWithGemini(req.file.path, { style, language });
+
+    // Clean up the uploaded file
+    fs.unlinkSync(req.file.path);
+
+    res.json({ summary });
+  } catch (error) {
+    console.error('Error processing audio:', error);
+    res.status(500).json({ error: 'Failed to process audio file' });
+  }
+});
