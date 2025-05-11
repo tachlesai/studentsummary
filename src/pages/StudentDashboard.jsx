@@ -134,7 +134,7 @@ const handleStartProcessing = async () => {
   formData.append('options', JSON.stringify(summaryOptions));
   
   try {
-    const response = await fetch(`${API_BASE_URL}/process-audio`, {
+    const response = await fetch(`${API_BASE_URL}/api/process-audio`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`

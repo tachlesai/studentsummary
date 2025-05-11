@@ -10,6 +10,11 @@ const AudioRecorder = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
   const [recordingMode, setRecordingMode] = useState('mic'); // 'mic' or 'system'
+  const [summaryOptions, setSummaryOptions] = useState({
+    style: 'detailed',
+    language: 'he',
+    outputType: 'summary'
+  });
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioContextRef = useRef(null);
@@ -129,11 +134,7 @@ const AudioRecorder = () => {
           `${API_BASE_URL}/api/process-recording`, 
           { 
             audioData: reader.result,
-            options: JSON.stringify({
-              style: 'detailed',
-              language: 'he',
-              outputType: 'summary'
-            })
+            options: JSON.stringify(summaryOptions)
           },
           { 
             headers: { 

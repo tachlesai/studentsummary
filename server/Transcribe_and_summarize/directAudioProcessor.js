@@ -124,9 +124,20 @@ async function transcribeWithGemini(filePath) {
     console.log(`[DirectProcessor] Transcription successful: ${transcript.length} characters, ${transcript.split(' ').length} words`);
     
     // Save transcription to a file for debugging
-    const transcriptFile = path.join(__dirname, '..', 'temp', `direct_transcript_${Date.now()}.txt`);
-    fs.writeFileSync(transcriptFile, transcript, 'utf8');
-    console.log(`[DirectProcessor] Transcription saved to: ${transcriptFile}`);
+    try {
+      const tempDir = path.join(__dirname, '..', 'temp');
+      // Ensure temp directory exists
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+      
+      const transcriptFile = path.join(tempDir, `direct_transcript_${Date.now()}.txt`);
+      fs.writeFileSync(transcriptFile, transcript, 'utf8');
+      console.log(`[DirectProcessor] Transcription saved to: ${transcriptFile}`);
+    } catch (saveError) {
+      console.error(`[DirectProcessor] Failed to save transcript to file:`, saveError);
+      // Continue even if saving fails - this is just for debugging
+    }
     
     return transcript;
   } catch (error) {
