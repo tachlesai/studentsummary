@@ -269,7 +269,7 @@ const AudioRecorder = () => {
 
             // After successful summary, increment usage count and refresh usage status
             try {
-              await fetch(`${API_BASE_URL}/update-usage`, {
+              await fetch(`${API_BASE_URL}/api/update-usage`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${token}`
@@ -518,36 +518,6 @@ const AudioRecorder = () => {
               <div className="mr-3 text-right">
                 <p className="text-sm text-red-700">{error}</p>
               </div>
-            </div>
-          </motion.div>
-        )}
-        
-        {/* Transcription result */}
-        {transcription && (
-          <motion.div 
-            className="mb-8 bg-gray-50 p-6 rounded-lg"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <h3 className="text-xl font-semibold text-right mb-4 text-gray-700">תמלול</h3>
-            <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200 max-h-60 overflow-y-auto">
-              <p className="text-gray-700 text-right whitespace-pre-wrap">{transcription}</p>
-            </div>
-          </motion.div>
-        )}
-        
-        {/* Summary result */}
-        {summary && (
-          <motion.div 
-            className="mb-8 bg-blue-50 p-6 rounded-lg"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <h3 className="text-xl font-semibold text-right mb-4 text-blue-800">סיכום</h3>
-            <div className="bg-white p-4 rounded-md shadow-sm border border-blue-200">
-              <p className="text-gray-700 text-right whitespace-pre-wrap">{summary}</p>
             </div>
           </motion.div>
         )}
