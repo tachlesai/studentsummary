@@ -41,7 +41,7 @@ const SummaryResult = () => {
         const summaryId = new URLSearchParams(location.search).get('id');
         if (summaryId) {
           const token = localStorage.getItem('token');
-          const response = await fetch(`${API_BASE_URL}/api/summaries/${summaryId}`, {
+          const response = await fetch(`${API_BASE_URL}/summaries/${summaryId}`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }

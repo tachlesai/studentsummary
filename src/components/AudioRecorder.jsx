@@ -131,7 +131,7 @@ const AudioRecorder = () => {
         
         // Make a simple POST request with the audio data
         const response = await axios.post(
-          `${API_BASE_URL}/api/process-recording`, 
+          `${API_BASE_URL}/process-recording`, 
           { 
             audioData: reader.result,
             options: JSON.stringify(summaryOptions)
@@ -148,7 +148,7 @@ const AudioRecorder = () => {
         
         // Increment usage count and refresh usage status
         try {
-          await fetch(`${API_BASE_URL}/api/update-usage`, {
+          await fetch(`${API_BASE_URL}/update-usage`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`
@@ -160,7 +160,7 @@ const AudioRecorder = () => {
         
         // Determine content based on output type
         const contentToStore = summaryOptions.outputType === 'transcript' 
-          ? response.data.transcription 
+          ? (response.data.transcription || response.data.summary.content) 
           : response.data.summary.content;
         
         // Save to localStorage for backup

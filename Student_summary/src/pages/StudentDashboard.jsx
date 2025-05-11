@@ -214,7 +214,7 @@ const StudentDashboard = () => {
     formData.append('options', JSON.stringify(summaryOptions));
     
     try {
-      const response = await fetch(`${API_BASE_URL}/api/process-audio`, {
+      const response = await fetch(`${API_BASE_URL}/process-audio`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -233,7 +233,9 @@ const StudentDashboard = () => {
       console.log(`Summary style used: ${summaryOptions.style}`);
       
       // Determine if we need to store summary or transcript
-      const contentToStore = summaryOptions.outputType === 'transcript' ? data.transcription : data.content;
+      const contentToStore = summaryOptions.outputType === 'transcript' 
+        ? (data.transcription || data.content) // Get transcription or fallback to content
+        : data.content; // Get content for summary
       
       // Save the summary data to localStorage for potential later use
       localStorage.setItem('lastProcessedSummary', JSON.stringify({
@@ -247,7 +249,7 @@ const StudentDashboard = () => {
       // Increment usage count and refresh usage status
       try {
         const token = localStorage.getItem('token');
-        await fetch(`${API_BASE_URL}/api/update-usage`, {
+        await fetch(`${API_BASE_URL}/update-usage`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`

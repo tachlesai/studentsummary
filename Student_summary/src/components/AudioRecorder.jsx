@@ -9,6 +9,8 @@ const AudioRecorder = () => {
   const [audioURL, setAudioURL] = useState('');
   const [audioBlob, setAudioBlob] = useState(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcription, setTranscription] = useState('');
+  const [summary, setSummary] = useState('');
   const [error, setError] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordingLevel, setRecordingLevel] = useState(0);
@@ -90,31 +92,22 @@ const AudioRecorder = () => {
     const fetchUsageStatus = async () => {
       try {
         const token = localStorage.getItem('token');
-        console.log(`Fetching usage status from: ${API_BASE_URL}/usage-status`);
-        const response = await axios.get(`${API_BASE_URL}/usage-status`, {
+        const response = await fetch(`${API_BASE_URL}/usage-status`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        console.log("Usage status response:", response.data);
-        if (response.data && response.data.usageData) {
-          setUsageData(response.data.usageData);
-          setIsUsageLimitReached(response.data.usageData.isLimitReached);
+        if (!response.ok) throw new Error('Failed to fetch usage status');
+        const data = await response.json();
+        if (data && data.usageData) {
+          setUsageData(data.usageData);
+          setIsUsageLimitReached(data.usageData.isLimitReached);
         }
       } catch (err) {
         console.error('Error fetching usage status:', err);
       }
     };
-    
-    // Expose fetchUsageStatus to be used in other functions
-    window.fetchUsageStatus = fetchUsageStatus;
-    
     fetchUsageStatus();
-    
-    return () => {
-      // Clean up the global reference when component unmounts
-      delete window.fetchUsageStatus;
-    };
   }, []);
 
   const formatTime = (seconds) => {
@@ -136,6 +129,8 @@ const AudioRecorder = () => {
   const startRecording = async () => {
     try {
       // Reset states
+      setTranscription('');
+      setSummary('');
       setError('');
       setRecordingTime(0);
       
@@ -232,14 +227,13 @@ const AudioRecorder = () => {
         try {
           // Send to server for processing
           const token = localStorage.getItem('token');
-          console.log(`Sending request to ${API_BASE_URL}/process-recording`);
-          const response = await axios.post(`${API_BASE_URL}/process-recording`, {
+          const response = await axios.post(`${API_BASE_URL}/api/process-recording`, {
             audioData: base64Audio,
-            options: JSON.stringify({
+            options: {
               style: summaryOptions.style,
               language: summaryOptions.language,
               outputType: summaryOptions.outputType
-            })
+            }
           }, {
             headers: {
               'Content-Type': 'application/json',
@@ -248,43 +242,43 @@ const AudioRecorder = () => {
             timeout: 300000 // 5-minute timeout
           });
           
-          console.log("Server response:", response.data);
-          
-          if (response.data) {
-            // Extract content from the response structure
-            const content = response.data.summary?.content || response.data.content || '';
+          if (response.data && response.data.content) {
+            // Handle successful response
+            if (summaryOptions.outputType === 'transcript') {
+              setTranscription(response.data.content);
+              setSummary(''); // Clear summary if transcript was requested
+            } else {
+              setSummary(response.data.content);
+              setTranscription(response.data.transcription || ''); // Set transcription if available
+            }
             
-            // Create a structure for navigation
+            // Create a structure similar to the file upload response
             const summaryData = {
-              summary: content,
-              pdfPath: response.data.summary?.pdf_path || response.data.pdf_path || null,
-              title: response.data.summary?.title || response.data.title || 'Audio Recording',
-              created_at: response.data.summary?.created_at || response.data.created_at || new Date().toISOString(),
-              file_name: response.data.summary?.file_name || response.data.file_name || `recording_${Date.now()}.webm`
+              summary: response.data.content,
+              pdfPath: response.data.pdf_path,
+              title: response.data.title || 'Audio Recording',
+              created_at: response.data.created_at || new Date().toISOString(),
+              file_name: response.data.file_name || `recording_${Date.now()}.webm`
             };
             
-            // Save to localStorage for persistence
+            // Save to localStorage for persistence, exactly like file upload
             localStorage.setItem('lastProcessedSummary', JSON.stringify(summaryData));
             
-            console.log("Redirecting to /summary-result with data:", summaryData);
-            
-            // Update usage count before redirecting
+            // Navigate to summary result page with same state structure as file upload
+            navigate('/summary-result', { state: summaryData });
+
+            // After successful summary, increment usage count and refresh usage status
             try {
-              console.log(`Updating usage count at: ${API_BASE_URL}/update-usage`);
-              const updateResponse = await axios.post(`${API_BASE_URL}/update-usage`, {}, {
+              await fetch(`${API_BASE_URL}/update-usage`, {
+                method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${token}`
                 }
               });
-              console.log("Usage update response:", updateResponse.data);
-              if (window.fetchUsageStatus) window.fetchUsageStatus();
+              if (typeof fetchUsageStatus === 'function') fetchUsageStatus();
             } catch (err) {
               console.error('Failed to update usage count:', err);
-              // Continue with redirection even if usage update fails
             }
-            
-            // Force navigation to summary result page
-            window.location.href = '/summary-result';
           } else {
             setError(response.data.error || 'Failed to process audio');
           }
@@ -524,6 +518,36 @@ const AudioRecorder = () => {
               <div className="mr-3 text-right">
                 <p className="text-sm text-red-700">{error}</p>
               </div>
+            </div>
+          </motion.div>
+        )}
+        
+        {/* Transcription result */}
+        {transcription && (
+          <motion.div 
+            className="mb-8 bg-gray-50 p-6 rounded-lg"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <h3 className="text-xl font-semibold text-right mb-4 text-gray-700">תמלול</h3>
+            <div className="bg-white p-4 rounded-md shadow-sm border border-gray-200 max-h-60 overflow-y-auto">
+              <p className="text-gray-700 text-right whitespace-pre-wrap">{transcription}</p>
+            </div>
+          </motion.div>
+        )}
+        
+        {/* Summary result */}
+        {summary && (
+          <motion.div 
+            className="mb-8 bg-blue-50 p-6 rounded-lg"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <h3 className="text-xl font-semibold text-right mb-4 text-blue-800">סיכום</h3>
+            <div className="bg-white p-4 rounded-md shadow-sm border border-blue-200">
+              <p className="text-gray-700 text-right whitespace-pre-wrap">{summary}</p>
             </div>
           </motion.div>
         )}
