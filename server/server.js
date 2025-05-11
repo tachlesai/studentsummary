@@ -14,12 +14,13 @@ const port = process.env.PORT || 5001;
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow any localhost origin, render.com domains, or no origin (like Postman)
+    // Allow any localhost origin, render.com domains, railway.app domains, or no origin (like Postman)
     if (!origin || 
         origin.startsWith('http://localhost:') || 
         origin.includes('tachlesai.com') || 
         origin.includes('.render.com') || 
-        origin.includes('tachlesai.onrender.com')) {
+        origin.includes('tachlesai.onrender.com') ||
+        origin.includes('.railway.app')) {
       callback(null, true);
     } else {
       console.log('CORS blocked origin:', origin);
