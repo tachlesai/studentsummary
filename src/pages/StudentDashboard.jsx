@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 const [summaryOptions, setSummaryOptions] = useState({
   style: 'detailed',
@@ -113,4 +115,84 @@ const styleTooltips = {
       <option value="en">אנגלית</option>
     </select>
   </div>
-</div> 
+</div>
+
+const handleStartProcessing = async () => {
+  if (!file) return;
+  
+  // Check if user has exceeded usage limits
+  if (usageData && usageData.isLimitReached) {
+    // Show usage limit exceeded message
+    toast.error('הגעת למגבלת השימוש החודשית. שדרג את החשבון שלך כדי להמשיך להשתמש בשירות.');
+    return;
+  }
+
+  setLoading(true);
+  
+  const formData = new FormData();
+  formData.append('audioFile', file);
+  formData.append('options', JSON.stringify(summaryOptions));
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/process-audio`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'שגיאה בעיבוד הקובץ');
+    }
+    
+    const data = await response.json();
+    
+    // Log the summary style that was used
+    console.log(`Summary style used: ${summaryOptions.style}`);
+    
+    // Determine if we need to store summary or transcript
+    const contentToStore = summaryOptions.outputType === 'transcript' ? data.transcription : data.content;
+    
+    // Save the summary data to localStorage for potential later use
+    localStorage.setItem('lastProcessedSummary', JSON.stringify({
+      summary: contentToStore,
+      pdfPath: data.pdfPath,
+      title: data.title,
+      created_at: new Date().toISOString(),
+      style: summaryOptions.style
+    }));
+    
+    // Increment usage count and refresh usage status
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${API_BASE_URL}/api/update-usage`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      fetchUsageStatus();
+    } catch (err) {
+      console.error('Failed to update usage count:', err);
+    }
+    
+    // Redirect to summary page
+    navigate('/summary-result', {
+      state: {
+        summary: contentToStore,
+        pdfPath: data.pdfPath,
+        title: data.title,
+        created_at: new Date().toISOString(),
+        style: summaryOptions.style
+      }
+    });
+  } catch (error) {
+    console.error('Error processing file:', error);
+    toast.error(error.message || 'שגיאה בעיבוד הקובץ, אנא נסה שוב');
+  } finally {
+    setLoading(false);
+    setFileReady(false);
+  }
+}; 

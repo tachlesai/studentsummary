@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { processAudio, cleanupAllFiles } from './Transcribe_and_summarize/directAudioProcessor.js';
+import { processAudio, cleanupAllFiles, transcribeWithGemini } from './Transcribe_and_summarize/directAudioProcessor.js';
 import db from './db.js';
 import bcrypt from 'bcryptjs';
 
@@ -140,11 +140,17 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
       }
     }
     
+    // Check if we need to only transcribe
+    const onlyTranscribe = parsedOptions.outputType === 'transcript';
+    const skipSummarization = parsedOptions.outputType === 'transcript';
+    
+    console.log(`Processing with options: onlyTranscribe=${onlyTranscribe}, skipSummarization=${skipSummarization}`);
+    
     // Get processing options from request
     const options = {
-      onlyTranscribe: parsedOptions.outputType === 'transcript',
+      onlyTranscribe: onlyTranscribe,
       skipTranscription: false,
-      skipSummarization: parsedOptions.outputType === 'transcript',
+      skipSummarization: skipSummarization,
       style: parsedOptions.style || 'detailed', // Include the summary style
       language: parsedOptions.language || 'he'
     };
@@ -152,17 +158,30 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
     console.log('Processing options:', options);
 
     // Process the audio file
-    const result = await processAudio(req.file.path, options);
+    let result;
+    let transcript = '';
     
-    // The new processAudio function directly returns the summary and style
-    // No need to check for success property
+    if (onlyTranscribe) {
+      // If we need only transcription, use transcribeWithGemini
+      transcript = await transcribeWithGemini(req.file.path);
+      result = {
+        summary: transcript,  // Use transcript as summary for consistency
+        transcript: transcript,
+        style: options.style,
+        language: options.language
+      };
+    } else {
+      // Otherwise use the standard processAudio function
+      result = await processAudio(req.file.path, options);
+    }
     
     // Prepare response data based on output type
     const responseData = {
       title: title,
       content: result.summary, // The summary is directly in result.summary
       pdfPath: null, // PDF generation will be handled separately if needed
-      style: result.style // Style is directly in result.style
+      style: result.style, // Style is directly in result.style
+      transcription: result.transcript || result.summary // If transcript is available, use it; otherwise use summary
     };
 
     // Save to database if we have content
@@ -229,7 +248,7 @@ app.post('/api/process-recording', async (req, res) => {
     let parsedOptions = {};
     if (req.body.options) {
       try {
-        parsedOptions = JSON.parse(req.body.options);
+        parsedOptions = typeof req.body.options === 'string' ? JSON.parse(req.body.options) : req.body.options;
         console.log('Recording options:', parsedOptions);
       } catch (e) {
         console.error('Error parsing recording options:', e);
@@ -302,20 +321,37 @@ app.post('/api/process-recording', async (req, res) => {
       // Process the audio file directly using the direct audio processor
       let result;
       try {
-        // Process with options for direct summarization
-        console.log('Starting direct audio processing...');
-        result = await processAudio(tempFilePath, {
-          onlyTranscribe: false, // We want a summary
-          skipTranscription: false,
-          skipSummarization: false,
-          style: parsedOptions.style || 'detailed', // Include the summary style
-          language: parsedOptions.language || 'he'
-        });
-        console.log('Audio processing completed successfully');
+        // Check if we need to only transcribe
+        const onlyTranscribe = parsedOptions.outputType === 'transcript';
+        const skipSummarization = parsedOptions.outputType === 'transcript';
         
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to process audio');
+        console.log(`Processing with options: onlyTranscribe=${onlyTranscribe}, skipSummarization=${skipSummarization}`);
+        
+        // Process with options for direct summarization or transcription
+        console.log('Starting direct audio processing...');
+        
+        // If we need only transcription, use transcribeWithGemini
+        let transcript = '';
+        if (onlyTranscribe) {
+          transcript = await transcribeWithGemini(tempFilePath);
+          result = {
+            summary: transcript,  // Use transcript as summary for consistency
+            transcript: transcript,
+            style: parsedOptions.style || 'detailed',
+            language: parsedOptions.language || 'he'
+          };
+        } else {
+          // Otherwise use the standard processAudio function
+          result = await processAudio(tempFilePath, {
+            onlyTranscribe: onlyTranscribe,
+            skipTranscription: false,
+            skipSummarization: skipSummarization,
+            style: parsedOptions.style || 'detailed', // Include the summary style
+            language: parsedOptions.language || 'he'
+          });
         }
+        
+        console.log('Audio processing completed successfully');
         
         // Clean up the temp file and any other temporary files
         await cleanupAllFiles([tempFilePath], { cleanDebugFiles: true });
@@ -356,7 +392,7 @@ app.post('/api/process-recording', async (req, res) => {
             file_name: fileName,
             style: result.style || parsedOptions.style || 'detailed' // Include the style
           },
-          transcription: result.transcript
+          transcription: result.transcript || result.summary // If transcript is available, use it; otherwise use summary
         });
         
       } catch (procError) {

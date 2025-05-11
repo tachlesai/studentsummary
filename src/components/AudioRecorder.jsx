@@ -117,8 +117,12 @@ const AudioRecorder = () => {
         // Get token
         const token = localStorage.getItem('token');
         
-        // Default style for summary
-        const style = 'detailed';
+        // Get user data from localStorage
+        const userData = localStorage.getItem('user');
+        let user = null;
+        if (userData) {
+          user = JSON.parse(userData);
+        }
         
         // Make a simple POST request with the audio data
         const response = await axios.post(
@@ -126,7 +130,7 @@ const AudioRecorder = () => {
           { 
             audioData: reader.result,
             options: JSON.stringify({
-              style: style,
+              style: 'detailed',
               language: 'he',
               outputType: 'summary'
             })
@@ -140,34 +144,46 @@ const AudioRecorder = () => {
         );
         
         console.log('Server response:', response.data);
-        console.log(`Summary style used: ${style}`);
         
-        if (response.data.success) {
-          // Save to localStorage for backup
-          localStorage.setItem(
-            'lastProcessedSummary', 
-            JSON.stringify({
-              summary: response.data.summary.content,
-              title: response.data.summary.title || 'Audio Summary',
-              created_at: response.data.summary.created_at,
-              pdfPath: response.data.summary.pdf_path,
-              style: style
-            })
-          );
-          
-          // Navigate to results page
-          navigate('/summary-result', {
-            state: {
-              summary: response.data.summary.content,
-              title: response.data.summary.title || 'Audio Summary',
-              created_at: response.data.summary.created_at,
-              pdfPath: response.data.summary.pdf_path,
-              style: style
+        // Increment usage count and refresh usage status
+        try {
+          await fetch(`${API_BASE_URL}/api/update-usage`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
             }
           });
-        } else {
-          setError(response.data.error || 'Error processing audio');
+        } catch (err) {
+          console.error('Failed to update usage count:', err);
         }
+        
+        // Determine content based on output type
+        const contentToStore = summaryOptions.outputType === 'transcript' 
+          ? response.data.transcription 
+          : response.data.summary.content;
+        
+        // Save to localStorage for backup
+        localStorage.setItem(
+          'lastProcessedSummary', 
+          JSON.stringify({
+            summary: contentToStore,
+            title: response.data.summary.title || 'Audio Recording',
+            created_at: response.data.summary.created_at,
+            pdfPath: response.data.summary.pdf_path,
+            style: summaryOptions.style
+          })
+        );
+        
+        // Navigate to results page
+        navigate('/summary-result', {
+          state: {
+            summary: contentToStore,
+            title: response.data.summary.title || 'Audio Recording',
+            created_at: response.data.summary.created_at,
+            pdfPath: response.data.summary.pdf_path,
+            style: summaryOptions.style
+          }
+        });
       } catch (error) {
         console.error('Error sending recording to server:', error);
         setError('שגיאה בשליחת ההקלטה. נסה שוב מאוחר יותר.');
