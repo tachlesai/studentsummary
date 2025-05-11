@@ -3,7 +3,8 @@
   "scripts": {
     "start": "node server/server.js",
     "build": "npm install && cd server && npm install && cd ../Student_summary && rm -rf node_modules && npm install && npm run build && cd ..",
-    "dev": "nodemon server/server.js"
+    "dev": "nodemon server/server.js",
+    "cleanup": "node server/cleanup.js"
   },
   "dependencies": {
     "@deepgram/sdk": "^2.4.0",

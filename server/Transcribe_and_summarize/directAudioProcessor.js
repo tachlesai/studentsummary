@@ -330,35 +330,82 @@ async function compressToAAC(filePath) {
       `compressed_${Date.now()}_${path.basename(filePath)}.m4a`
     );
     
-    // Use FFmpeg to compress with AAC codec
+    // Extract audio only and use more efficient compression settings
+    // -vn: Skip video (extract audio only)
     // -c:a aac: use AAC audio codec
     // -b:a 64k: 64kbps bitrate (good for speech)
     // -ac 1: convert to mono
     // -ar 16000: 16kHz sample rate (sufficient for speech)
-    await execAsync(`ffmpeg -y -i "${filePath}" -c:a aac -b:a 64k -ac 1 -ar 16000 "${outputPath}"`);
     
-    // Verify the file was created and has content
-    if (!fs.existsSync(outputPath)) {
-      throw new Error(`Compression failed, output file not created: ${outputPath}`);
-    }
-    
-    const originalStats = fs.statSync(filePath);
-    const compressedStats = fs.statSync(outputPath);
-    
-    const originalSizeMB = originalStats.size / (1024 * 1024);
-    const compressedSizeMB = compressedStats.size / (1024 * 1024);
-    const compressionRatio = originalSizeMB / compressedSizeMB;
-    
-    console.log(`[DirectProcessor] Compression results:
-      Original size: ${originalSizeMB.toFixed(2)}MB
-      Compressed size: ${compressedSizeMB.toFixed(2)}MB
-      Compression ratio: ${compressionRatio.toFixed(2)}x`);
-    
-    if (compressedStats.size < 1000) {
-      throw new Error(`Compression produced a suspiciously small file: ${compressedStats.size} bytes`);
-    }
-    
-    return outputPath;
+    // Return a promise that resolves when compression is complete
+    return new Promise((resolve, reject) => {
+      console.log(`[DirectProcessor] Starting compression with optimized settings...`);
+      
+      // Command for extracting audio only - much faster and more memory efficient
+      const ffmpegCmd = `ffmpeg -y -i "${filePath}" -vn -c:a aac -b:a 64k -ac 1 -ar 16000 "${outputPath}"`;
+      
+      console.log(`[DirectProcessor] Running command: ${ffmpegCmd}`);
+      
+      // Start a timer to log progress
+      const startTime = Date.now();
+      let lastLogTime = startTime;
+      
+      // Execute with progress updates
+      const process = exec(ffmpegCmd);
+      
+      // Log progress periodically
+      const progressInterval = setInterval(() => {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`[DirectProcessor] Compression in progress... ${elapsed}s elapsed`);
+      }, 10000); // Log every 10 seconds
+      
+      process.stdout.on('data', (data) => {
+        console.log(`[DirectProcessor] FFmpeg stdout: ${data}`);
+      });
+      
+      process.stderr.on('data', (data) => {
+        // Only log every 3 seconds to avoid flooding the console
+        const now = Date.now();
+        if (now - lastLogTime > 3000) {
+          console.log(`[DirectProcessor] Compression progress: ${data}`);
+          lastLogTime = now;
+        }
+      });
+      
+      process.on('close', (code) => {
+        clearInterval(progressInterval);
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        
+        if (code === 0) {
+          // Verify the file was created and has content
+          if (!fs.existsSync(outputPath)) {
+            reject(new Error(`Compression failed, output file not created: ${outputPath}`));
+            return;
+          }
+          
+          const originalStats = fs.statSync(filePath);
+          const compressedStats = fs.statSync(outputPath);
+          
+          const originalSizeMB = originalStats.size / (1024 * 1024);
+          const compressedSizeMB = compressedStats.size / (1024 * 1024);
+          const compressionRatio = originalSizeMB / compressedSizeMB;
+          
+          console.log(`[DirectProcessor] Compression completed in ${elapsed}s:
+            Original size: ${originalSizeMB.toFixed(2)}MB
+            Compressed size: ${compressedSizeMB.toFixed(2)}MB
+            Compression ratio: ${compressionRatio.toFixed(2)}x`);
+          
+          if (compressedStats.size < 1000) {
+            reject(new Error(`Compression produced a suspiciously small file: ${compressedStats.size} bytes`));
+            return;
+          }
+          
+          resolve(outputPath);
+        } else {
+          reject(new Error(`FFmpeg process exited with code ${code} after ${elapsed}s`));
+        }
+      });
+    });
   } catch (error) {
     console.error(`[DirectProcessor] Error compressing audio:`, error);
     throw error;

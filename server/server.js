@@ -408,6 +408,9 @@ async function cleanupOldTempFiles() {
   const MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
   const now = Date.now();
   
+  // Define audio extensions to clean up
+  const audioExtensions = ['.mp3', '.mp4', '.wav', '.m4a', '.webm', '.aac', '.ogg'];
+  
   // Clean up temp directory
   try {
     if (fs.existsSync(tempDir)) {
@@ -416,13 +419,19 @@ async function cleanupOldTempFiles() {
         .filter(file => {
           try {
             const stats = fs.statSync(file);
+            // Delete audio files regardless of age
+            const ext = path.extname(file).toLowerCase();
+            if (audioExtensions.includes(ext) || file.includes('compressed_')) {
+              return true;
+            }
+            // Delete other temp files if they're older than MAX_AGE
             return now - stats.mtimeMs > MAX_AGE;
           } catch (err) {
             return false;
           }
         });
       
-      console.log(`Found ${tempFiles.length} old files in temp directory`);
+      console.log(`Found ${tempFiles.length} files to clean up in temp directory`);
       await cleanupAllFiles(tempFiles);
     }
   } catch (error) {
@@ -437,13 +446,19 @@ async function cleanupOldTempFiles() {
         .filter(file => {
           try {
             const stats = fs.statSync(file);
+            // Delete audio files regardless of age
+            const ext = path.extname(file).toLowerCase();
+            if (audioExtensions.includes(ext) || file.includes('compressed_')) {
+              return true;
+            }
+            // Delete other upload files if they're older than MAX_AGE
             return now - stats.mtimeMs > MAX_AGE;
           } catch (err) {
             return false;
           }
         });
       
-      console.log(`Found ${uploadFiles.length} old files in uploads directory`);
+      console.log(`Found ${uploadFiles.length} files to clean up in uploads directory`);
       await cleanupAllFiles(uploadFiles);
     }
   } catch (error) {
