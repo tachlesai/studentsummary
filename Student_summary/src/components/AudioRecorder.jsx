@@ -90,16 +90,16 @@ const AudioRecorder = () => {
     const fetchUsageStatus = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`${API_BASE_URL}/usage-status`, {
+        console.log(`Fetching usage status from: ${API_BASE_URL}/usage-status`);
+        const response = await axios.get(`${API_BASE_URL}/usage-status`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-        if (!response.ok) throw new Error('Failed to fetch usage status');
-        const data = await response.json();
-        if (data && data.usageData) {
-          setUsageData(data.usageData);
-          setIsUsageLimitReached(data.usageData.isLimitReached);
+        console.log("Usage status response:", response.data);
+        if (response.data && response.data.usageData) {
+          setUsageData(response.data.usageData);
+          setIsUsageLimitReached(response.data.usageData.isLimitReached);
         }
       } catch (err) {
         console.error('Error fetching usage status:', err);
@@ -232,6 +232,7 @@ const AudioRecorder = () => {
         try {
           // Send to server for processing
           const token = localStorage.getItem('token');
+          console.log(`Sending request to ${API_BASE_URL}/process-recording`);
           const response = await axios.post(`${API_BASE_URL}/process-recording`, {
             audioData: base64Audio,
             options: JSON.stringify({
@@ -269,15 +270,17 @@ const AudioRecorder = () => {
             
             // Update usage count before redirecting
             try {
-              await fetch(`${API_BASE_URL}/update-usage`, {
-                method: 'POST',
+              console.log(`Updating usage count at: ${API_BASE_URL}/update-usage`);
+              const updateResponse = await axios.post(`${API_BASE_URL}/update-usage`, {}, {
                 headers: {
                   'Authorization': `Bearer ${token}`
                 }
               });
+              console.log("Usage update response:", updateResponse.data);
               if (window.fetchUsageStatus) window.fetchUsageStatus();
             } catch (err) {
               console.error('Failed to update usage count:', err);
+              // Continue with redirection even if usage update fails
             }
             
             // Force navigation to summary result page
