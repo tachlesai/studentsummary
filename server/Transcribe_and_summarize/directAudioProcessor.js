@@ -132,8 +132,8 @@ async function transcribeWithGemini(filePath) {
       }
       
       const transcriptFile = path.join(tempDir, `direct_transcript_${Date.now()}.txt`);
-      fs.writeFileSync(transcriptFile, transcript, 'utf8');
-      console.log(`[DirectProcessor] Transcription saved to: ${transcriptFile}`);
+    fs.writeFileSync(transcriptFile, transcript, 'utf8');
+    console.log(`[DirectProcessor] Transcription saved to: ${transcriptFile}`);
     } catch (saveError) {
       console.error(`[DirectProcessor] Failed to save transcript to file:`, saveError);
       // Continue even if saving fails - this is just for debugging
