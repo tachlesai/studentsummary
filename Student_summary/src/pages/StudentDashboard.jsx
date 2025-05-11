@@ -20,7 +20,11 @@ const StudentDashboard = () => {
     outputType: 'summary'
   });
   const [isUsageLimitReached, setIsUsageLimitReached] = useState(false);
+  const [processedSummary, setProcessedSummary] = useState(null);
+  const [processedPdfPath, setProcessedPdfPath] = useState(null);
+  const [processingComplete, setProcessingComplete] = useState(false);
   const [fileReady, setFileReady] = useState(false);
+  const [result, setResult] = useState(null);
 
   // Add tooltip content for summary styles
   const styleTooltips = {
@@ -233,9 +237,7 @@ const StudentDashboard = () => {
       console.log(`Summary style used: ${summaryOptions.style}`);
       
       // Determine if we need to store summary or transcript
-      const contentToStore = summaryOptions.outputType === 'transcript' 
-        ? (data.transcription || data.content) // Get transcription or fallback to content
-        : data.content; // Get content for summary
+      const contentToStore = summaryOptions.outputType === 'transcript' ? data.transcription : data.content;
       
       // Save the summary data to localStorage for potential later use
       localStorage.setItem('lastProcessedSummary', JSON.stringify({
@@ -500,6 +502,25 @@ const StudentDashboard = () => {
             </CardContent>
           </Card>
         </div>
+        {/* Result Display Section */}
+        {processedSummary && (
+          <div className="mt-8 p-4 bg-white rounded-lg shadow-md">
+            <h3 className="text-xl font-bold mb-4 font-sans">התוצאה:</h3>
+            <div className="bg-gray-50 p-6 rounded whitespace-pre-wrap font-sans">
+              {processedSummary}
+            </div>
+            {processedPdfPath && (
+              <a 
+                href={`${API_BASE_URL}${processedPdfPath}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+              >
+                הורד כ-PDF
+              </a>
+            )}
+          </div>
+        )}
         {/* Recent Files Section */}
         <div className="mt-10" style={{width:'95vw', maxWidth:'1100px'}}>
           <h3 className="text-xl font-bold mb-6 font-sans text-gray-800">הסיכומים האחרונים שלך</h3>

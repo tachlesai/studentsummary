@@ -14,13 +14,7 @@ const port = process.env.PORT || 5001;
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    // In production, allow all origins
-    if (process.env.NODE_ENV === 'production') {
-      callback(null, true);
-      return;
-    }
-    
-    // In development, be more restrictive
+    // Allow any localhost origin, render.com domains, railway.app domains, or no origin (like Postman)
     if (!origin || 
         origin.startsWith('http://localhost:') || 
         origin.includes('tachlesai.com') || 
@@ -238,7 +232,6 @@ app.post('/api/process-recording', async (req, res) => {
   
   try {
     console.log('Received direct audio processing request');
-    console.log('Request options:', req.body.options);
     
     if (!req.body.audioData) {
       return res.status(400).json({ 
@@ -255,7 +248,7 @@ app.post('/api/process-recording', async (req, res) => {
     let parsedOptions = {};
     if (req.body.options) {
       try {
-        parsedOptions = typeof req.body.options === 'string' ? JSON.parse(req.body.options) : req.body.options;
+        parsedOptions = req.body.options;
         console.log('Recording options:', parsedOptions);
       } catch (e) {
         console.error('Error parsing recording options:', e);
@@ -329,8 +322,8 @@ app.post('/api/process-recording', async (req, res) => {
       let result;
       try {
         // Check if we need to only transcribe
-        const onlyTranscribe = parsedOptions.outputType === 'transcript';
-        const skipSummarization = parsedOptions.outputType === 'transcript';
+        const onlyTranscribe = parsedOptions.onlyTranscribe || parsedOptions.outputType === 'transcript';
+        const skipSummarization = parsedOptions.skipSummarization || parsedOptions.outputType === 'transcript';
         
         console.log(`Processing with options: onlyTranscribe=${onlyTranscribe}, skipSummarization=${skipSummarization}`);
         
@@ -388,7 +381,7 @@ app.post('/api/process-recording', async (req, res) => {
           }
         }
         
-        // Make sure the response format is consistent for both transcription and summary
+        // Return the processed result
         res.json({
           success: true,
           summary: {
@@ -908,14 +901,9 @@ app.get('/api/account-details', async (req, res) => {
   }
 });
 
-// Health check endpoint
+// Health check endpoint for Render
 app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-    version: '1.0.0'
-  });
+  res.status(200).json({ status: 'ok', message: 'Server is running' });
 });
 
 // Serve static files in production

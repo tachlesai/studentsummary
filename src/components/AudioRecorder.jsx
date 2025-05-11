@@ -122,19 +122,18 @@ const AudioRecorder = () => {
         // Get token
         const token = localStorage.getItem('token');
         
-        // Get user data from localStorage
-        const userData = localStorage.getItem('user');
-        let user = null;
-        if (userData) {
-          user = JSON.parse(userData);
-        }
-        
         // Make a simple POST request with the audio data
         const response = await axios.post(
-          `${API_BASE_URL}/process-recording`, 
+          `${API_BASE_URL}/api/process-recording`, 
           { 
             audioData: reader.result,
-            options: JSON.stringify(summaryOptions)
+            options: {
+              style: summaryOptions.style,
+              language: summaryOptions.language,
+              outputType: summaryOptions.outputType,
+              onlyTranscribe: summaryOptions.outputType === 'transcript',
+              skipSummarization: summaryOptions.outputType === 'transcript'
+            }
           },
           { 
             headers: { 
@@ -145,22 +144,23 @@ const AudioRecorder = () => {
         );
         
         console.log('Server response:', response.data);
+        console.log(`Summary style used: ${summaryOptions.style}`);
         
         // Increment usage count and refresh usage status
         try {
-          await fetch(`${API_BASE_URL}/update-usage`, {
-            method: 'POST',
+          await axios.post(`${API_BASE_URL}/api/update-usage`, {}, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
           });
+          console.log('Usage count updated successfully');
         } catch (err) {
           console.error('Failed to update usage count:', err);
         }
         
         // Determine content based on output type
         const contentToStore = summaryOptions.outputType === 'transcript' 
-          ? (response.data.transcription || response.data.summary.content) 
+          ? response.data.transcription 
           : response.data.summary.content;
         
         // Save to localStorage for backup
