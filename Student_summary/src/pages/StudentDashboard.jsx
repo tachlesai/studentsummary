@@ -248,14 +248,7 @@ const StudentDashboard = () => {
         style: summaryOptions.style
       }));
       
-      // Refresh data in the background
-      fetchSummaries();
-      fetchUsageStatus();
-      
-      // Show success message
-      toast.success('הקובץ עובד בהצלחה!');
-
-      // Increment usage count
+      // Increment usage count and refresh usage status
       try {
         const token = localStorage.getItem('token');
         await fetch(`${API_BASE_URL}/update-usage`, {
@@ -264,6 +257,7 @@ const StudentDashboard = () => {
             'Authorization': `Bearer ${token}`
           }
         });
+        fetchUsageStatus();
       } catch (err) {
         console.error('Failed to update usage count:', err);
       }
