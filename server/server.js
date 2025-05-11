@@ -14,7 +14,13 @@ const port = process.env.PORT || 5001;
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow any localhost origin, render.com domains, railway.app domains, or no origin (like Postman)
+    // In production, allow all origins
+    if (process.env.NODE_ENV === 'production') {
+      callback(null, true);
+      return;
+    }
+    
+    // In development, be more restrictive
     if (!origin || 
         origin.startsWith('http://localhost:') || 
         origin.includes('tachlesai.com') || 
@@ -901,9 +907,14 @@ app.get('/api/account-details', async (req, res) => {
   }
 });
 
-// Health check endpoint for Render
+// Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', message: 'Server is running' });
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.0.0'
+  });
 });
 
 // Serve static files in production

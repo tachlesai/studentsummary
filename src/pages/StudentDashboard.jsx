@@ -134,7 +134,7 @@ const handleStartProcessing = async () => {
   formData.append('options', JSON.stringify(summaryOptions));
   
   try {
-    const response = await fetch(`${API_BASE_URL}/api/process-audio`, {
+    const response = await fetch(`${API_BASE_URL}/process-audio`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -143,8 +143,22 @@ const handleStartProcessing = async () => {
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'שגיאה בעיבוד הקובץ');
+      if (response.headers.get('content-type')?.includes('application/json')) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'שגיאה בעיבוד הקובץ');
+      } else {
+        // Handle non-JSON error responses
+        const errorText = await response.text();
+        console.error('Server returned non-JSON response:', errorText);
+        throw new Error(`שגיאת שרת (${response.status}): אנא נסה שוב מאוחר יותר`);
+      }
+    }
+    
+    // Check content type before parsing JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error('Server returned non-JSON content type:', contentType);
+      throw new Error('שגיאה בתגובת השרת: פורמט לא צפוי');
     }
     
     const data = await response.json();
@@ -153,7 +167,9 @@ const handleStartProcessing = async () => {
     console.log(`Summary style used: ${summaryOptions.style}`);
     
     // Determine if we need to store summary or transcript
-    const contentToStore = summaryOptions.outputType === 'transcript' ? data.transcription : data.content;
+    const contentToStore = summaryOptions.outputType === 'transcript' 
+      ? (data.transcription || data.content) // Get transcription or fallback to content
+      : data.content; // Get content for summary
     
     // Save the summary data to localStorage for potential later use
     localStorage.setItem('lastProcessedSummary', JSON.stringify({
@@ -167,7 +183,7 @@ const handleStartProcessing = async () => {
     // Increment usage count and refresh usage status
     try {
       const token = localStorage.getItem('token');
-      await fetch(`${API_BASE_URL}/api/update-usage`, {
+      await fetch(`${API_BASE_URL}/update-usage`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

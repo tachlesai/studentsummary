@@ -227,7 +227,7 @@ const AudioRecorder = () => {
         try {
           // Send to server for processing
           const token = localStorage.getItem('token');
-          const response = await axios.post(`${API_BASE_URL}/api/process-recording`, {
+          const response = await axios.post(`${API_BASE_URL}/process-recording`, {
             audioData: base64Audio,
             options: {
               style: summaryOptions.style,
@@ -241,6 +241,11 @@ const AudioRecorder = () => {
             },
             timeout: 300000 // 5-minute timeout
           });
+          
+          // Check if response is valid
+          if (!response.data) {
+            throw new Error('Invalid response from server');
+          }
           
           if (response.data && response.data.content) {
             // Handle successful response
