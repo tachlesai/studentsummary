@@ -9,8 +9,6 @@ const AudioRecorder = () => {
   const [audioURL, setAudioURL] = useState('');
   const [audioBlob, setAudioBlob] = useState(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [transcription, setTranscription] = useState('');
-  const [summary, setSummary] = useState('');
   const [error, setError] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordingLevel, setRecordingLevel] = useState(0);
@@ -107,7 +105,16 @@ const AudioRecorder = () => {
         console.error('Error fetching usage status:', err);
       }
     };
+    
+    // Expose fetchUsageStatus to be used in other functions
+    window.fetchUsageStatus = fetchUsageStatus;
+    
     fetchUsageStatus();
+    
+    return () => {
+      // Clean up the global reference when component unmounts
+      delete window.fetchUsageStatus;
+    };
   }, []);
 
   const formatTime = (seconds) => {
@@ -129,8 +136,6 @@ const AudioRecorder = () => {
   const startRecording = async () => {
     try {
       // Reset states
-      setTranscription('');
-      setSummary('');
       setError('');
       setRecordingTime(0);
       
@@ -227,13 +232,13 @@ const AudioRecorder = () => {
         try {
           // Send to server for processing
           const token = localStorage.getItem('token');
-          const response = await axios.post(`${API_BASE_URL}/api/process-recording`, {
+          const response = await axios.post(`${API_BASE_URL}/process-recording`, {
             audioData: base64Audio,
-            options: {
+            options: JSON.stringify({
               style: summaryOptions.style,
               language: summaryOptions.language,
               outputType: summaryOptions.outputType
-            }
+            })
           }, {
             headers: {
               'Content-Type': 'application/json',
@@ -242,43 +247,41 @@ const AudioRecorder = () => {
             timeout: 300000 // 5-minute timeout
           });
           
-          if (response.data && response.data.content) {
-            // Handle successful response
-            if (summaryOptions.outputType === 'transcript') {
-              setTranscription(response.data.content);
-              setSummary(''); // Clear summary if transcript was requested
-            } else {
-              setSummary(response.data.content);
-              setTranscription(response.data.transcription || ''); // Set transcription if available
-            }
+          console.log("Server response:", response.data);
+          
+          if (response.data) {
+            // Extract content from the response structure
+            const content = response.data.summary?.content || response.data.content || '';
             
-            // Create a structure similar to the file upload response
+            // Create a structure for navigation
             const summaryData = {
-              summary: response.data.content,
-              pdfPath: response.data.pdf_path,
-              title: response.data.title || 'Audio Recording',
-              created_at: response.data.created_at || new Date().toISOString(),
-              file_name: response.data.file_name || `recording_${Date.now()}.webm`
+              summary: content,
+              pdfPath: response.data.summary?.pdf_path || response.data.pdf_path || null,
+              title: response.data.summary?.title || response.data.title || 'Audio Recording',
+              created_at: response.data.summary?.created_at || response.data.created_at || new Date().toISOString(),
+              file_name: response.data.summary?.file_name || response.data.file_name || `recording_${Date.now()}.webm`
             };
             
-            // Save to localStorage for persistence, exactly like file upload
+            // Save to localStorage for persistence
             localStorage.setItem('lastProcessedSummary', JSON.stringify(summaryData));
             
-            // Navigate to summary result page with same state structure as file upload
-            navigate('/summary-result', { state: summaryData });
-
-            // After successful summary, increment usage count and refresh usage status
+            console.log("Redirecting to /summary-result with data:", summaryData);
+            
+            // Update usage count before redirecting
             try {
-              await fetch(`${API_BASE_URL}/api/update-usage`, {
+              await fetch(`${API_BASE_URL}/update-usage`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${token}`
                 }
               });
-              if (typeof fetchUsageStatus === 'function') fetchUsageStatus();
+              if (window.fetchUsageStatus) window.fetchUsageStatus();
             } catch (err) {
               console.error('Failed to update usage count:', err);
             }
+            
+            // Force navigation to summary result page
+            window.location.href = '/summary-result';
           } else {
             setError(response.data.error || 'Failed to process audio');
           }
