@@ -238,6 +238,7 @@ app.post('/api/process-recording', async (req, res) => {
   
   try {
     console.log('Received direct audio processing request');
+    console.log('Request options:', req.body.options);
     
     if (!req.body.audioData) {
       return res.status(400).json({ 
@@ -387,7 +388,7 @@ app.post('/api/process-recording', async (req, res) => {
           }
         }
         
-        // Return the processed result
+        // Make sure the response format is consistent for both transcription and summary
         res.json({
           success: true,
           summary: {

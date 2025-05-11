@@ -247,45 +247,47 @@ const AudioRecorder = () => {
             throw new Error('Invalid response from server');
           }
           
-          if (response.data && response.data.content) {
-            // Handle successful response
-            if (summaryOptions.outputType === 'transcript') {
-              setTranscription(response.data.content);
-              setSummary(''); // Clear summary if transcript was requested
-            } else {
-              setSummary(response.data.content);
-              setTranscription(response.data.transcription || ''); // Set transcription if available
-            }
-            
-            // Create a structure similar to the file upload response
-            const summaryData = {
-              summary: response.data.content,
-              pdfPath: response.data.pdf_path,
-              title: response.data.title || 'Audio Recording',
-              created_at: response.data.created_at || new Date().toISOString(),
-              file_name: response.data.file_name || `recording_${Date.now()}.webm`
-            };
-            
-            // Save to localStorage for persistence, exactly like file upload
-            localStorage.setItem('lastProcessedSummary', JSON.stringify(summaryData));
-            
-            // Navigate to summary result page with same state structure as file upload
-            navigate('/summary-result', { state: summaryData });
-
-            // After successful summary, increment usage count and refresh usage status
-            try {
-              await fetch(`${API_BASE_URL}/update-usage`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`
-                }
-              });
-              if (typeof fetchUsageStatus === 'function') fetchUsageStatus();
-            } catch (err) {
-              console.error('Failed to update usage count:', err);
-            }
+          console.log('Server response:', response.data);
+          
+          // Determine content based on output type
+          let content = '';
+          if (summaryOptions.outputType === 'transcript') {
+            content = response.data.transcription || response.data.summary?.content;
+            setTranscription(content);
+            setSummary(''); // Clear summary if transcript was requested
           } else {
-            setError(response.data.error || 'Failed to process audio');
+            content = response.data.summary?.content;
+            setSummary(content);
+            setTranscription(response.data.transcription || ''); // Set transcription if available
+          }
+          
+          // Create a structure for localStorage and navigation
+          const summaryData = {
+            summary: content,
+            pdfPath: response.data.summary?.pdf_path || null,
+            title: response.data.summary?.title || 'Audio Recording',
+            created_at: response.data.summary?.created_at || new Date().toISOString(),
+            file_name: response.data.summary?.file_name || `recording_${Date.now()}.webm`,
+            style: summaryOptions.style
+          };
+          
+          // Save to localStorage for persistence
+          localStorage.setItem('lastProcessedSummary', JSON.stringify(summaryData));
+          
+          // Navigate to summary result page
+          navigate('/summary-result', { state: summaryData });
+          
+          // After successful processing, increment usage count
+          try {
+            await fetch(`${API_BASE_URL}/update-usage`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            if (typeof fetchUsageStatus === 'function') fetchUsageStatus();
+          } catch (err) {
+            console.error('Failed to update usage count:', err);
           }
         } catch (error) {
           console.error('Error processing audio:', error);
