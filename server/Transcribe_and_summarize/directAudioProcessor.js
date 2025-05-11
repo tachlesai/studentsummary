@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { exec, spawn } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
@@ -316,12 +316,64 @@ async function summarizeWithGemini(text, options = {}) {
 }
 
 /**
+ * Compress audio to efficient AAC format to reduce memory usage
+ * @param {string} filePath - Path to the audio file
+ * @returns {Promise<string>} - Path to the compressed AAC file
+ */
+async function compressToAAC(filePath) {
+  try {
+    console.log(`[DirectProcessor] Compressing audio file: ${filePath}`);
+    
+    // Create a unique output path
+    const outputPath = path.join(
+      path.dirname(filePath),
+      `compressed_${Date.now()}_${path.basename(filePath)}.m4a`
+    );
+    
+    // Use FFmpeg to compress with AAC codec
+    // -c:a aac: use AAC audio codec
+    // -b:a 64k: 64kbps bitrate (good for speech)
+    // -ac 1: convert to mono
+    // -ar 16000: 16kHz sample rate (sufficient for speech)
+    await execAsync(`ffmpeg -y -i "${filePath}" -c:a aac -b:a 64k -ac 1 -ar 16000 "${outputPath}"`);
+    
+    // Verify the file was created and has content
+    if (!fs.existsSync(outputPath)) {
+      throw new Error(`Compression failed, output file not created: ${outputPath}`);
+    }
+    
+    const originalStats = fs.statSync(filePath);
+    const compressedStats = fs.statSync(outputPath);
+    
+    const originalSizeMB = originalStats.size / (1024 * 1024);
+    const compressedSizeMB = compressedStats.size / (1024 * 1024);
+    const compressionRatio = originalSizeMB / compressedSizeMB;
+    
+    console.log(`[DirectProcessor] Compression results:
+      Original size: ${originalSizeMB.toFixed(2)}MB
+      Compressed size: ${compressedSizeMB.toFixed(2)}MB
+      Compression ratio: ${compressionRatio.toFixed(2)}x`);
+    
+    if (compressedStats.size < 1000) {
+      throw new Error(`Compression produced a suspiciously small file: ${compressedStats.size} bytes`);
+    }
+    
+    return outputPath;
+  } catch (error) {
+    console.error(`[DirectProcessor] Error compressing audio:`, error);
+    throw error;
+  }
+}
+
+/**
  * Summarize audio directly using Gemini
  * @param {string} filePath - Path to audio file
  * @param {object} options - Summarization options
  * @returns {Promise<string>} - Summary text
  */
 async function summarizeAudioWithGemini(filePath, options = {}) {
+  let compressedFile = null;
+  
   try {
     console.log(`[DirectProcessor] Summarizing audio file: ${filePath}`);
     console.log(`[DirectProcessor] Summary style: ${options.style || 'detailed'}`);
@@ -330,75 +382,40 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     if (!genAI) {
       throw new Error('Gemini client not initialized - API key may be missing');
     }
-    
+
     // Get file stats
     const stats = fs.statSync(filePath);
     const fileSizeMB = stats.size / (1024 * 1024);
-    console.log(`[DirectProcessor] Audio file size: ${fileSizeMB.toFixed(2)}MB`);
+    console.log(`[DirectProcessor] Original audio file size: ${fileSizeMB.toFixed(2)}MB`);
+
+    // Compress audio to AAC if over 10MB
+    if (fileSizeMB > 10) {
+      compressedFile = await compressToAAC(filePath);
+      filePath = compressedFile;
+      
+      const compressedStats = fs.statSync(compressedFile);
+      const compressedSizeMB = compressedStats.size / (1024 * 1024);
+      console.log(`[DirectProcessor] Using compressed file: ${compressedFile} (${compressedSizeMB.toFixed(2)}MB)`);
+    }
 
     // Get file extension and mime type
     const ext = path.extname(filePath).toLowerCase();
     let mimeType;
-    let audioFilePath = filePath;
-
-    // If it's a video file, extract the audio first
-    if (ext === '.mp4') {
-      console.log(`[DirectProcessor] Extracting audio from video file...`);
-      const audioExt = '.mp3';
-      audioFilePath = filePath.replace(ext, audioExt);
-      
-      // Use ffmpeg to extract audio
-      await new Promise((resolve, reject) => {
-        const ffmpeg = spawn('ffmpeg', [
-          '-i', filePath,
-          '-vn', // No video
-          '-acodec', 'libmp3lame', // Use MP3 codec
-          '-ab', '128k', // Audio bitrate
-          '-ar', '44100', // Sample rate
-          '-loglevel', 'error', // Only show errors
-          audioFilePath
-        ]);
-
-        let lastProgress = 0;
-        ffmpeg.stderr.on('data', (data) => {
-          const output = data.toString();
-          // Only log errors
-          if (output.includes('Error')) {
-            console.log(`[DirectProcessor] FFmpeg Error: ${output}`);
-          }
-        });
-
-        ffmpeg.on('close', (code) => {
-          if (code === 0) {
-            console.log(`[DirectProcessor] Audio extraction complete`);
-            resolve();
-          } else {
-            reject(new Error(`FFmpeg process exited with code ${code}`));
-          }
-        });
-      });
-
-      // Get the new file size
-      const audioStats = fs.statSync(audioFilePath);
-      const audioSizeMB = audioStats.size / (1024 * 1024);
-      console.log(`[DirectProcessor] Extracted audio size: ${audioSizeMB.toFixed(2)}MB`);
-      
-      mimeType = 'audio/mpeg';
-    } else {
-      // Handle other audio formats
-      switch (ext) {
-        case '.mp3':
-          mimeType = 'audio/mpeg';
-          break;
-        case '.wav':
-          mimeType = 'audio/wav';
-          break;
-        case '.m4a':
-          mimeType = 'audio/mp4';
-          break;
-        default:
-          throw new Error(`Unsupported file format: ${ext}. Supported formats are: MP3, MP4, WAV, M4A`);
-      }
+    switch (ext) {
+      case '.mp3':
+        mimeType = 'audio/mpeg';
+        break;
+      case '.mp4':
+        mimeType = 'video/mp4';
+        break;
+      case '.wav':
+        mimeType = 'audio/wav';
+        break;
+      case '.m4a':
+        mimeType = 'audio/mp4';
+        break;
+      default:
+        throw new Error(`Unsupported file format: ${ext}. Supported formats are: MP3, MP4, WAV, M4A`);
     }
 
     // Create a model instance
@@ -416,23 +433,13 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     console.log(`[DirectProcessor] Sending request to Gemini API for summarization...`);
     
     // Read file in chunks to manage memory
-    const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
-    const fileStream = fs.createReadStream(audioFilePath, { highWaterMark: CHUNK_SIZE });
+    const fileStream = fs.createReadStream(filePath);
     const chunks = [];
-    let totalBytes = 0;
     
-    // Process the file in chunks
     for await (const chunk of fileStream) {
       chunks.push(chunk);
-      totalBytes += chunk.length;
-      
-      // Log progress every 10MB
-      if (totalBytes % (10 * 1024 * 1024) === 0) {
-        console.log(`[DirectProcessor] Processed ${(totalBytes / (1024 * 1024)).toFixed(2)}MB of ${(stats.size / (1024 * 1024)).toFixed(2)}MB`);
-      }
     }
     
-    // Combine chunks into a single buffer
     const fileBuffer = Buffer.concat(chunks);
     
     // Send to Gemini API
@@ -452,14 +459,28 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     const summary = result.response.text();
     console.log(`[DirectProcessor] Summarization successful: ${summary.length} characters, ${summary.split(' ').length} words`);
     
-    // Clean up extracted audio file if it was created
-    if (audioFilePath !== filePath) {
-      fs.unlinkSync(audioFilePath);
-      console.log(`[DirectProcessor] Cleaned up extracted audio file: ${audioFilePath}`);
+    // Clean up compressed file if created
+    if (compressedFile) {
+      try {
+        fs.unlinkSync(compressedFile);
+        console.log(`[DirectProcessor] Cleaned up compressed file: ${compressedFile}`);
+      } catch (cleanupError) {
+        console.error(`[DirectProcessor] Failed to clean up compressed file:`, cleanupError);
+      }
     }
     
     return summary;
   } catch (error) {
+    // Clean up compressed file on error
+    if (compressedFile) {
+      try {
+        fs.unlinkSync(compressedFile);
+        console.log(`[DirectProcessor] Cleaned up compressed file on error: ${compressedFile}`);
+      } catch (cleanupError) {
+        console.error(`[DirectProcessor] Failed to clean up compressed file:`, cleanupError);
+      }
+    }
+    
     console.error(`[DirectProcessor] Summarization error:`, error);
     if (error.response) {
       console.error(`[DirectProcessor] Error response:`, {
@@ -637,7 +658,11 @@ async function processAudio(filePath, options = {}) {
   }
 }
 
-// Helper function to get style-specific prompt
+/**
+ * Get style-specific prompt instructions based on the chosen style
+ * @param {string} style - The style option (concise, detailed, etc.)
+ * @returns {string} - Style-specific prompt instructions
+ */
 function getStyleSpecificPrompt(style) {
   switch (style) {
     case 'concise':
@@ -731,9 +756,10 @@ function getStyleSpecificPrompt(style) {
       - End with a "Why this matters:" single sentence`;
     
     default:
-      return `\n\nCreate a balanced summary that captures the main points while maintaining readability and clarity.
+      // Default to detailed summary
+      return `\n\nWrite a comprehensive and detailed summary that fully captures everything important that was said. Include explanations, definitions, processes, examples, and context, all written in clear and academic language. The goal is for a student to study from your summary as if they had attended the lecture. Structure the text logically, and maintain the same order of topics as in the original lecture.
       
-      Formatting for default style:
+      Formatting for detailed style:
       - Use clear section headers with numbering (1, 2, 3)
       - Include subsections with decimal numbering (1.1, 1.2, etc.)
       - Format important definitions in blockquotes or with special formatting
@@ -743,7 +769,11 @@ function getStyleSpecificPrompt(style) {
   }
 }
 
-// Helper function to get language-specific prompt
+/**
+ * Get language-specific prompt instructions based on the chosen language
+ * @param {string} language - The language option (en, he, etc.)
+ * @returns {string} - Language-specific prompt instructions
+ */
 function getLanguageSpecificPrompt(language) {
   switch (language) {
     case 'en':
