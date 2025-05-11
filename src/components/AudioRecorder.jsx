@@ -10,11 +10,6 @@ const AudioRecorder = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
   const [recordingMode, setRecordingMode] = useState('mic'); // 'mic' or 'system'
-  const [summaryOptions, setSummaryOptions] = useState({
-    style: 'detailed',
-    language: 'he',
-    outputType: 'summary'
-  });
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioContextRef = useRef(null);
@@ -122,18 +117,19 @@ const AudioRecorder = () => {
         // Get token
         const token = localStorage.getItem('token');
         
+        // Default style for summary
+        const style = 'detailed';
+        
         // Make a simple POST request with the audio data
         const response = await axios.post(
           `${API_BASE_URL}/api/process-recording`, 
           { 
             audioData: reader.result,
-            options: {
-              style: summaryOptions.style,
-              language: summaryOptions.language,
-              outputType: summaryOptions.outputType,
-              onlyTranscribe: summaryOptions.outputType === 'transcript',
-              skipSummarization: summaryOptions.outputType === 'transcript'
-            }
+            options: JSON.stringify({
+              style: style,
+              language: 'he',
+              outputType: 'summary'
+            })
           },
           { 
             headers: { 
@@ -144,47 +140,34 @@ const AudioRecorder = () => {
         );
         
         console.log('Server response:', response.data);
-        console.log(`Summary style used: ${summaryOptions.style}`);
+        console.log(`Summary style used: ${style}`);
         
-        // Increment usage count and refresh usage status
-        try {
-          await axios.post(`${API_BASE_URL}/api/update-usage`, {}, {
-            headers: {
-              'Authorization': `Bearer ${token}`
+        if (response.data.success) {
+          // Save to localStorage for backup
+          localStorage.setItem(
+            'lastProcessedSummary', 
+            JSON.stringify({
+              summary: response.data.summary.content,
+              title: response.data.summary.title || 'Audio Summary',
+              created_at: response.data.summary.created_at,
+              pdfPath: response.data.summary.pdf_path,
+              style: style
+            })
+          );
+          
+          // Navigate to results page
+          navigate('/summary-result', {
+            state: {
+              summary: response.data.summary.content,
+              title: response.data.summary.title || 'Audio Summary',
+              created_at: response.data.summary.created_at,
+              pdfPath: response.data.summary.pdf_path,
+              style: style
             }
           });
-          console.log('Usage count updated successfully');
-        } catch (err) {
-          console.error('Failed to update usage count:', err);
+        } else {
+          setError(response.data.error || 'Error processing audio');
         }
-        
-        // Determine content based on output type
-        const contentToStore = summaryOptions.outputType === 'transcript' 
-          ? response.data.transcription 
-          : response.data.summary.content;
-        
-        // Save to localStorage for backup
-        localStorage.setItem(
-          'lastProcessedSummary', 
-          JSON.stringify({
-            summary: contentToStore,
-            title: response.data.summary.title || 'Audio Recording',
-            created_at: response.data.summary.created_at,
-            pdfPath: response.data.summary.pdf_path,
-            style: summaryOptions.style
-          })
-        );
-        
-        // Navigate to results page
-        navigate('/summary-result', {
-          state: {
-            summary: contentToStore,
-            title: response.data.summary.title || 'Audio Recording',
-            created_at: response.data.summary.created_at,
-            pdfPath: response.data.summary.pdf_path,
-            style: summaryOptions.style
-          }
-        });
       } catch (error) {
         console.error('Error sending recording to server:', error);
         setError('שגיאה בשליחת ההקלטה. נסה שוב מאוחר יותר.');
