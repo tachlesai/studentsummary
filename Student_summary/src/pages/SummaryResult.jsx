@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 import API_BASE_URL from '../config';
 import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
+import ReactMarkdown from 'react-markdown';
 
 // Style name mapping for display
 const styleDisplayNames = {
@@ -16,6 +17,20 @@ const styleDisplayNames = {
   glossary: 'מילון מונחים',
   steps: 'צעד אחר צעד',
   tldr: 'TL;DR'
+};
+
+const summaryContentStyles = {
+  background: '#fff',
+  borderRadius: '12px',
+  padding: '2rem',
+  fontSize: '1.1rem',
+  lineHeight: 1.7,
+  color: '#222',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+  direction: 'rtl',
+  marginTop: '1.5rem',
+  marginBottom: '1.5rem',
+  fontFamily: 'inherit',
 };
 
 const SummaryResult = () => {
@@ -138,20 +153,18 @@ const SummaryResult = () => {
               </button>
             </div>
             
-            <div className="p-6 bg-white rounded-b-lg">
-              <div className="border border-gray-100 bg-gray-50 p-6 rounded-lg shadow-inner">
-                {summary ? (
-                  <p className="whitespace-pre-wrap text-gray-700 leading-relaxed">{summary}</p>
-                ) : (
-                  <div className="text-center py-10">
-                    <div className="animate-pulse flex flex-col items-center justify-center">
-                      <div className="rounded-full bg-gray-200 h-12 w-12 mb-4"></div>
-                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-2.5"></div>
-                      <div className="h-4 bg-gray-200 rounded w-1/3"></div>
-                    </div>
+            <div style={summaryContentStyles}>
+              {summary ? (
+                <ReactMarkdown>{summary}</ReactMarkdown>
+              ) : (
+                <div className="text-center py-10">
+                  <div className="animate-pulse flex flex-col items-center justify-center">
+                    <div className="rounded-full bg-gray-200 h-12 w-12 mb-4"></div>
+                    <div className="h-4 bg-gray-200 rounded w-1/2 mb-2.5"></div>
+                    <div className="h-4 bg-gray-200 rounded w-1/3"></div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

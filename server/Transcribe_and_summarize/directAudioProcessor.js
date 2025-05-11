@@ -429,7 +429,7 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     if (!genAI) {
       throw new Error('Gemini client not initialized - API key may be missing');
     }
-
+    
     // Get file stats
     const stats = fs.statSync(filePath);
     const fileSizeMB = stats.size / (1024 * 1024);

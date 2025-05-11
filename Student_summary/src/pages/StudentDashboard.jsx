@@ -254,6 +254,19 @@ const StudentDashboard = () => {
       
       // Show success message
       toast.success('הקובץ עובד בהצלחה!');
+
+      // Increment usage count
+      try {
+        const token = localStorage.getItem('token');
+        await fetch(`${API_BASE_URL}/update-usage`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+      } catch (err) {
+        console.error('Failed to update usage count:', err);
+      }
       
       // Redirect to summary page
       navigate('/summary-result', {

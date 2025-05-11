@@ -266,6 +266,18 @@ const AudioRecorder = () => {
             
             // Navigate to summary result page with same state structure as file upload
             navigate('/summary-result', { state: summaryData });
+
+            // After successful summary, increment usage count
+            try {
+              await fetch(`${API_BASE_URL}/update-usage`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                }
+              });
+            } catch (err) {
+              console.error('Failed to update usage count:', err);
+            }
           } else {
             setError(response.data.error || 'Failed to process audio');
           }
