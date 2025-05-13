@@ -52,10 +52,6 @@ const FAQ = () => {
     {
       question: "האם הסיכומים נשמרים לצפייה מאוחרת?",
       answer: "כן, כל הסיכומים נשמרים בחשבון שלך ונגישים בכל זמן"
-    },
-    {
-      question: "האם יש תקופת ניסיון?",
-      answer: "כן, אנחנו מציעים תקופת ניסיון חינם של 7 ימים"
     }
   ];
 
@@ -64,20 +60,99 @@ const FAQ = () => {
   };
 
   return (
-    <div className="section faq-container">
-      <h2 className="faq-title">שאלות נפוצות</h2>
-      <div className="faq-list">
+    <div style={{
+      padding: '80px 20px',
+      maxWidth: '1200px',
+      margin: '0 auto',
+      backgroundColor: 'white'
+    }}>
+      <h2 style={{
+        fontSize: '2.5rem',
+        fontWeight: '800',
+        textAlign: 'center',
+        marginBottom: '3rem',
+        color: '#1a365d',
+        position: 'relative'
+      }}>
+        <span style={{ 
+          position: 'absolute',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          top: '-20px',
+          fontSize: '3rem'
+        }}></span>
+        שאלות נפוצות
+      </h2>
+
+      <div style={{
+        display: 'grid',
+        gap: '1rem',
+        maxWidth: '800px',
+        margin: '0 auto'
+      }}>
         {faqData.map((item, index) => (
-          <div key={index} className="faq-item">
+          <div 
+            key={index} 
+            style={{
+              border: '1px solid #e5e7eb',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              transition: 'all 0.3s ease',
+              boxShadow: activeIndex === index ? '0 4px 20px rgba(0,0,0,0.1)' : 'none',
+              transform: activeIndex === index ? 'scale(1.02)' : 'scale(1)'
+            }}
+          >
             <button
-              className={`faq-question ${activeIndex === index ? 'active' : ''}`}
               onClick={() => toggleAccordion(index)}
+              style={{
+                width: '100%',
+                padding: '1.5rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: activeIndex === index ? '#f8fafc' : 'white',
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                textAlign: 'right',
+                fontSize: '1.1rem',
+                fontWeight: '600',
+                color: '#1a365d'
+              }}
             >
               {item.question}
-              <span className="faq-icon">{activeIndex === index ? '-' : '+'}</span>
+              <span style={{
+                fontSize: '1.5rem',
+                color: '#6366f1',
+                transition: 'transform 0.3s ease',
+                transform: activeIndex === index ? 'rotate(45deg)' : 'rotate(0)',
+                width: '24px',
+                height: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#eef2ff',
+                borderRadius: '50%'
+              }}>
+                +
+              </span>
             </button>
-            <div className={`faq-answer ${activeIndex === index ? 'active' : ''}`}>
-              {item.answer}
+            <div style={{
+              maxHeight: activeIndex === index ? '500px' : '0',
+              overflow: 'hidden',
+              transition: 'all 0.3s ease',
+              backgroundColor: '#f8fafc',
+              padding: activeIndex === index ? '1.5rem' : '0',
+              borderTop: activeIndex === index ? '1px solid #e5e7eb' : 'none'
+            }}>
+              <p style={{
+                margin: '0',
+                color: '#4b5563',
+                fontSize: '1rem',
+                lineHeight: '1.6'
+              }}>
+                {item.answer}
+              </p>
             </div>
           </div>
         ))}
