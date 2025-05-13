@@ -1,3 +1,3 @@
-VERSION=2025-05-11-004
+VERSION=2025-05-11-005
 TIMESTAMP=$(date)
-FEATURES=["fixed-api-endpoints", "improved-error-handling"] 
+FEATURES=["fixed-api-endpoints", "improved-error-handling", "fixed-npm-package"] 

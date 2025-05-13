@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "ffmpeg", "npm"]
+nixPkgs = ["nodejs_20", "ffmpeg"]
 cmds = ["echo 'Build timestamp: $(date)' > build_timestamp.txt"]
 
 [phases.install]
@@ -11,4 +11,4 @@ cmds = ["cd Student_summary && npm run build"]
 [start]
 cmd = "node server/server.js"
 
-# Force rebuild: 2025-05-11-004 
+# Force rebuild: 2025-05-11-005 
