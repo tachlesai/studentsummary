@@ -6,11 +6,11 @@ cmds = ["echo 'Build timestamp: $(date)' > build_timestamp.txt"]
 cmds = [
   "npm ci",
   "export YOUTUBE_DL_SKIP_PYTHON_CHECK=1 && cd server && npm ci",
-  "cd ../Student_summary && npm ci"
+  "cd /app/Student_summary && npm ci"
 ]
 
 [phases.build]
-cmds = ["cd Student_summary && npm run build"]
+cmds = ["cd /app/Student_summary && npm run build"]
 
 [start]
 cmd = "node server/server.js"
@@ -18,4 +18,4 @@ cmd = "node server/server.js"
 [environment]
 YOUTUBE_DL_SKIP_PYTHON_CHECK = "1"
 
-# Force rebuild: 2025-05-11-008 
+# Force rebuild: 2025-05-11-009 
