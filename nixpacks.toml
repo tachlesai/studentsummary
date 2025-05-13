@@ -1,2 +1,4 @@
 [phases.setup]
 nixPkgs = ["nodejs", "ffmpeg"] 
+
+# Force rebuild: 2025-05-11-001 

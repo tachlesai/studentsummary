@@ -121,8 +121,9 @@ const AudioRecorder = () => {
         const style = 'detailed';
         
         // Make a simple POST request with the audio data
+        // Version: 2025-05-11-002 - Fixed API endpoint
         const response = await axios.post(
-          `${API_BASE_URL}/api/process-recording`, 
+          `${API_BASE_URL}/process-recording`, 
           { 
             audioData: reader.result,
             options: JSON.stringify({

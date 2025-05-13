@@ -8,6 +8,9 @@ import { processAudio, cleanupAllFiles } from './Transcribe_and_summarize/direct
 import db from './db.js';
 import bcrypt from 'bcryptjs';
 
+// Force rebuild: 2025-05-11-002 - This will ensure Railway rebuilds the application
+console.log('Starting server - Version 2025-05-11-002');
+
 const app = express();
 const port = process.env.PORT || 5001;
 
