@@ -8,8 +8,8 @@ import { processAudio, cleanupAllFiles } from './Transcribe_and_summarize/direct
 import db from './db.js';
 import bcrypt from 'bcryptjs';
 
-// Force rebuild: 2025-05-11-002 - This will ensure Railway rebuilds the application
-console.log('Starting server - Version 2025-05-11-002');
+// Force rebuild: 2025-05-11-003 - This will ensure Railway rebuilds the application
+console.log('Starting server - Version 2025-05-11-003');
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -17,13 +17,12 @@ const port = process.env.PORT || 5001;
 // CORS configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow any localhost origin, render.com domains, railway.app domains, or no origin (like Postman)
+    // Allow any localhost origin, railway.app domains, tachlesai.com, or no origin (like Postman)
     if (!origin || 
         origin.startsWith('http://localhost:') || 
         origin.includes('tachlesai.com') || 
-        origin.includes('.render.com') || 
-        origin.includes('tachlesai.onrender.com') ||
-        origin.includes('.railway.app')) {
+        origin.includes('.railway.app') ||
+        origin.includes('tachlesai.up.railway.app')) {
       callback(null, true);
     } else {
       console.log('CORS blocked origin:', origin);
@@ -868,9 +867,9 @@ app.get('/api/account-details', async (req, res) => {
   }
 });
 
-// Health check endpoint for Render
+// Health check endpoint for Railway
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', message: 'Server is running' });
+  res.status(200).json({ status: 'ok', message: 'Server is running on Railway' });
 });
 
 // Serve static files in production
