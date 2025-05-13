@@ -227,7 +227,7 @@ const AudioRecorder = () => {
         try {
           // Send to server for processing
           const token = localStorage.getItem('token');
-          const response = await axios.post(`${API_BASE_URL}/api/process-recording`, {
+          const response = await axios.post(`${API_BASE_URL}/process-recording`, {
             audioData: base64Audio,
             options: {
               style: summaryOptions.style,

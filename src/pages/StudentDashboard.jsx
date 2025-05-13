@@ -134,7 +134,7 @@ const handleStartProcessing = async () => {
   formData.append('options', JSON.stringify(summaryOptions));
   
   try {
-    const response = await fetch(`${API_BASE_URL}/api/process-audio`, {
+    const response = await fetch(`${API_BASE_URL}/process-audio`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -167,7 +167,7 @@ const handleStartProcessing = async () => {
     // Increment usage count and refresh usage status
     try {
       const token = localStorage.getItem('token');
-      await fetch(`${API_BASE_URL}/api/update-usage`, {
+      await fetch(`${API_BASE_URL}/update-usage`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
