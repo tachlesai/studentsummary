@@ -17,9 +17,8 @@ if (process.env.DATABASE_URL) {
   console.log('Using DATABASE_URL for connection');
   dbConfig = {
     connectionString: process.env.DATABASE_URL,
-    ssl: isProduction && process.env.DATABASE_URL.includes('render.com') 
-      ? { rejectUnauthorized: false } 
-      : false
+    // Railway requires SSL for PostgreSQL connections
+    ssl: isProduction ? { rejectUnauthorized: false } : false
   };
 } else {
   // Otherwise use individual environment variables
@@ -61,6 +60,18 @@ pool.connect()
     // If SSL error in production, provide more helpful error
     if (isProduction && err.message.includes('SSL')) {
       console.error('SSL Error: If running locally in production mode, set SSL_ENABLED=false in .env');
+    }
+    // Log the full connection details for debugging (except password)
+    if (isProduction) {
+      console.error('Connection details:', {
+        ...(dbConfig.connectionString ? { connectionString: process.env.DATABASE_URL ? 'Set (Railway)' : 'Set' } : {
+          user: dbConfig.user,
+          host: dbConfig.host,
+          database: dbConfig.database,
+          port: dbConfig.port,
+        }),
+        ssl: dbConfig.ssl
+      });
     }
   });
 
