@@ -1,11 +1,11 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "ffmpeg"]
+nixPkgs = ["nodejs_20", "ffmpeg", "python3"]
 cmds = ["echo 'Build timestamp: $(date)' > build_timestamp.txt"]
 
 [phases.install]
 cmds = [
   "npm ci",
-  "cd server && npm ci",
+  "export YOUTUBE_DL_SKIP_PYTHON_CHECK=1 && cd server && npm ci",
   "cd ../Student_summary && npm ci"
 ]
 
@@ -15,4 +15,7 @@ cmds = ["cd Student_summary && npm run build"]
 [start]
 cmd = "node server/server.js"
 
-# Force rebuild: 2025-05-11-007 
+[environment]
+YOUTUBE_DL_SKIP_PYTHON_CHECK = "1"
+
+# Force rebuild: 2025-05-11-008 
