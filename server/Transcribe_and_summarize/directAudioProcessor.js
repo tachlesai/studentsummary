@@ -91,7 +91,7 @@ async function transcribeWithGemini(filePath) {
     console.log(`[DirectProcessor] Audio file size: ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB`);
     
     // Create a model instance - using the newer Gemini 2.5 Pro model
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-exp-03-25" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" });
     
     // Prepare the prompt for transcription
     const prompt = `Please transcribe the following audio file. The audio is in Hebrew. 
@@ -170,7 +170,7 @@ async function summarizeWithGemini(text, options = {}) {
     }
     
     // Create a model instance - using the newer Gemini 2.5 Pro model
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-exp-03-25" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" });
     
     // Base prompt for student-friendly summarization
     let prompt = `You are an expert educational summarizer. Create a student-friendly summary of the following Hebrew text, which is a transcription of an audio recording.`;
@@ -477,7 +477,7 @@ async function summarizeAudioWithGemini(filePath, options = {}) {
     }
 
     // Create a model instance
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-exp-03-25" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" });
     
     // Prepare the prompt
     let prompt = `You are an expert educational summarizer. Create a student-friendly summary of the following audio recording.`;
