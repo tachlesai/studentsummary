@@ -940,3 +940,60 @@ const server = app.listen(port, () => {
 // Schedule cleanup job to run every hour - this will clean up any temporary files
 // that may have been left behind
 const cleanupJob = setInterval(cleanupOldTempFiles, 60 * 60 * 1000); // 1 hour
+
+// Payment success handler endpoint
+app.get('/api/payment-success', async (req, res) => {
+  try {
+    const { email } = req.query;
+    
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email parameter is required'
+      });
+    }
+    
+    console.log(`Processing payment success for email: ${email}`);
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email format'
+      });
+    }
+    
+    // Update user subscription status in database
+    const updateQuery = `
+      UPDATE users 
+      SET subscription_status = 'premium', 
+          subscription_start_date = NOW(),
+          subscription_end_date = NOW() + INTERVAL '30 days'
+      WHERE email = $1
+      RETURNING user_id, email, first_name
+    `;
+    
+    const result = await db.query(updateQuery, [email]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    const user = result.rows[0];
+    console.log(`Updated subscription for user: ${user.email} (${user.first_name || 'Unknown'})`);
+    
+    // Redirect to a success page
+    res.redirect('/payment-confirmation?status=success');
+    
+  } catch (error) {
+    console.error('Payment success handling error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error processing payment success'
+    });
+  }
+});

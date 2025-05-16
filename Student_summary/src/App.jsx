@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
@@ -12,6 +12,7 @@ import SummaryResult from './pages/SummaryResult';
 import AudioRecordingPage from './pages/AudioRecordingPage';
 import MembershipPayment from './pages/MembershipPayment';
 import AccountDetails from './pages/AccountDetails';
+import PaymentConfirmation from './pages/PaymentConfirmation';
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
               <Route path="/record-audio" element={<AudioRecordingPage />} />
               <Route path="/membership-payment" element={<MembershipPayment />} />
               <Route path="/account-details" element={<AccountDetails />} />
+              <Route path="/payment-confirmation" element={<PaymentConfirmation />} />
             </Routes>
           </div>
         </div>
