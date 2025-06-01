@@ -6,6 +6,8 @@ import API_BASE_URL from '../config';
 import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import ReactMarkdown from 'react-markdown';
+import { motion } from 'framer-motion';
+import { Brain, Puzzle, Timer } from 'lucide-react';
 
 // Style name mapping for display
 const styleDisplayNames = {
@@ -93,6 +95,15 @@ const SummaryResult = () => {
   // Get the display name for the style
   const styleDisplayName = style ? (styleDisplayNames[style] || style) : '';
 
+  // Function to navigate to game with summary data
+  const navigateToGame = (gamePath) => {
+    // Store only the summary ID for use in the game
+    localStorage.setItem('gameSourceSummary', JSON.stringify({
+      summaryId: summaryData.id
+    }));
+    navigate(gamePath);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -169,6 +180,91 @@ const SummaryResult = () => {
           </CardContent>
         </Card>
         
+        {/* Learning Games Section */}
+        {summary && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="mt-8"
+          >
+            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-6 rounded-lg border border-indigo-100">
+              <h2 className="text-2xl font-bold mb-2 text-indigo-700">התאמן עם משחקי למידה AI</h2>
+              <p className="text-gray-700 mb-6">מערכת ה-AI שלנו מייצרת משחקי למידה חכמים מהסיכום באמצעות Gemini. שפר את הזיכרון שלך ובדוק את ההבנה שלך עם שאלות אוטומטיות שנוצרו מהתוכן.</p>
+            
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Matching Game Card */}
+                <motion.div
+                  whileHover={{ y: -5 }}
+                  className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden hover:border-indigo-300 transition-all"
+                >
+                  <div className="h-2 w-full bg-indigo-500"></div>
+                  <div className="p-6">
+                    <div className="flex items-center mb-4">
+                      <div className="p-2 rounded-lg bg-indigo-100 mr-3">
+                        <Puzzle className="h-6 w-6 text-indigo-600" />
+                      </div>
+                      <h3 className="text-xl font-semibold">משחק התאמה</h3>
+                    </div>
+                    <p className="text-gray-600 mb-4">התאם שאלות עם התשובות הנכונות כדי לבדוק את הידע שלך.</p>
+                    <button 
+                      onClick={() => navigateToGame('/games/matching')}
+                      className="w-full py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors"
+                    >
+                      שחק עכשיו
+                    </button>
+                  </div>
+                </motion.div>
+              
+                {/* Quiz Game Card */}
+                <motion.div
+                  whileHover={{ y: -5 }}
+                  className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden hover:border-purple-300 transition-all"
+                >
+                  <div className="h-2 w-full bg-purple-500"></div>
+                  <div className="p-6">
+                    <div className="flex items-center mb-4">
+                      <div className="p-2 rounded-lg bg-purple-100 mr-3">
+                        <Brain className="h-6 w-6 text-purple-600" />
+                      </div>
+                      <h3 className="text-xl font-semibold">אתגר חידון</h3>
+                    </div>
+                    <p className="text-gray-600 mb-4">בדוק את הידע שלך עם שאלות רב-ברירה המבוססות על הסיכום.</p>
+                    <button 
+                      onClick={() => navigateToGame('/games/quiz')}
+                      className="w-full py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 transition-colors"
+                    >
+                      שחק עכשיו
+                    </button>
+                  </div>
+                </motion.div>
+              
+                {/* Speed Challenge Card */}
+                <motion.div
+                  whileHover={{ y: -5 }}
+                  className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden hover:border-blue-300 transition-all"
+                >
+                  <div className="h-2 w-full bg-blue-500"></div>
+                  <div className="p-6">
+                    <div className="flex items-center mb-4">
+                      <div className="p-2 rounded-lg bg-blue-100 mr-3">
+                        <Timer className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <h3 className="text-xl font-semibold">אתגר מהירות</h3>
+                    </div>
+                    <p className="text-gray-600 mb-4">ענה על שאלות במהירות ובדייקנות לפני שיגמר הזמן.</p>
+                    <button 
+                      onClick={() => navigateToGame('/games/speed-challenge')}
+                      className="w-full py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                    >
+                      שחק עכשיו
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import { processAudio, cleanupAllFiles, transcribeWithGemini } from './Transcribe_and_summarize/directAudioProcessor.js';
 import db from './db.js';
 import bcrypt from 'bcryptjs';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import jwt from 'jsonwebtoken';
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -49,34 +51,47 @@ app.use((req, res, next) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Middleware to verify JWT token
-const verifyToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
+// Middleware to check authentication
+const authMiddleware = (req, res, next) => {
+  console.log('⚙️ Auth middleware check');
   
-  if (!token) {
-    return res.status(401).json({ success: false, error: 'No token provided' });
+  // Get token from header
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('❌ No token or invalid format');
+    return res.status(401).json({ success: false, message: 'Authentication required' });
   }
   
+  const token = authHeader.split(' ')[1];
+  
   try {
-    // For our mock JWT format
-    if (token.split('.').length === 3) {
-      const payload = token.split('.')[1];
-      const decoded = Buffer.from(payload, 'base64').toString();
-      const userData = JSON.parse(decoded);
+    // Try to verify as JWT token
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded;
+      console.log('✅ JWT auth successful for:', decoded.email);
+      return next();
+    } catch (jwtError) {
+      console.log('ℹ️ JWT verification failed, trying base64 format');
       
-      if (!userData || !userData.email) {
-        return res.status(401).json({ success: false, error: 'Invalid token' });
+      // If JWT verification fails, try to decode as base64 for development testing
+      const base64Decoded = Buffer.from(token, 'base64').toString('utf-8');
+      const userData = JSON.parse(base64Decoded);
+      
+      if (userData && userData.user && userData.user.email) {
+        // For development only - accept simple base64 tokens
+        req.user = userData.user;
+        console.log('✅ Base64 auth accepted for dev testing:', userData.user.email);
+        return next();
       }
       
-      // Attach user data to request object
-      req.user = userData;
-      next();
-    } else {
-      return res.status(401).json({ success: false, error: 'Invalid token format' });
+      // If both methods fail, return error
+      console.log('❌ Authentication failed');
+      return res.status(401).json({ success: false, message: 'Invalid token' });
     }
   } catch (err) {
-    console.error('Token verification error:', err);
-    return res.status(401).json({ success: false, error: 'Token verification failed' });
+    console.error('❌ Auth error:', err);
+    return res.status(401).json({ success: false, message: 'Authentication error' });
   }
 };
 
@@ -130,8 +145,255 @@ const flexibleUpload = (req, res, next) => {
   });
 };
 
+// Helper function to generate flashcards with Gemini
+async function generateFlashcardsWithGemini(content, title) {
+  try {
+    console.log(`============================`);
+    console.log(`🎮 Starting flashcard generation for: "${title}"`);
+    console.log(`📝 Content length: ${content.length} characters`);
+    
+    // Get Gemini API key
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+      console.error('❌ No Gemini API key available - check your .env file');
+      return null;
+    }
+    
+    // Initialize Gemini
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+    
+    // Use Gemini 2.0 Flash for faster flashcard generation
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    console.log(`🤖 Using model: gemini-2.0-flash`);
+    
+    // Prepare prompt for flashcard generation
+    const prompt = `
+    You are an educational flashcard creator. Create high-quality flashcards from the following text.
+    Language: Hebrew (Right-to-left)
+    
+    Generate 10-15 flashcards with challenging questions and comprehensive answers.
+    For each flashcard:
+    1. Create a clear, concise question that tests understanding (not just recall)
+    2. Provide a complete answer that explains the concept fully
+    3. For quiz games, provide 3 plausible incorrect answers related to the content
+    
+    Return ONLY valid JSON in the following format:
+    [
+      {
+        "question": "Question text here?",
+        "answer": "Answer text here.",
+        "incorrectAnswers": [
+          "Plausible wrong answer 1",
+          "Plausible wrong answer 2",
+          "Plausible wrong answer 3"
+        ]
+      },
+      ...
+    ]
+    
+    IMPORTANT: For the incorrectAnswers, make sure they are:
+    - Related to the topic and plausible (not obviously wrong)
+    - Different enough from the correct answer to be clearly incorrect
+    - Roughly the same length as the correct answer
+    - Actually incorrect (not partially correct)
+    
+    Text to convert into flashcards:
+    ${content}
+    `;
+    
+    console.log(`⏱️ Sending request to Gemini at ${new Date().toISOString()}`);
+    const startTime = Date.now();
+    
+    // Send to Gemini API
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    const endTime = Date.now();
+    const processingTime = (endTime - startTime) / 1000;
+    console.log(`✅ Received response from Gemini in ${processingTime.toFixed(2)} seconds`);
+    
+    // Extract JSON from text (in case there's other text included)
+    let flashcards;
+    try {
+      // Find JSON array in the response
+      const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (jsonMatch) {
+        flashcards = JSON.parse(jsonMatch[0]);
+      } else {
+        flashcards = JSON.parse(text);
+      }
+      
+      if (!Array.isArray(flashcards)) {
+        throw new Error('Response is not a valid array');
+      }
+      
+      console.log(`🃏 Successfully generated ${flashcards.length} flashcards`);
+      console.log(`============================`);
+      
+      return flashcards;
+    } catch (parseError) {
+      console.error(`❌ Error parsing flashcards JSON: ${parseError.message}`);
+      console.error(`❌ Raw response: ${text.substring(0, 200)}...`);
+      console.log(`============================`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`❌ Error generating flashcards with Gemini: ${error.message}`);
+    console.log(`============================`);
+    return null;
+  }
+}
+
+// Helper function to save flashcards to DB
+async function saveFlashcardsToDatabase(flashcards, summaryId, title, userEmail) {
+  try {
+    console.log(`============================`);
+    console.log(`💾 Starting database save for flashcards from summary ID: ${summaryId}`);
+    console.log(`👤 User: ${userEmail}`);
+    console.log(`📚 Set title: "${title}"`);
+    
+    if (!flashcards || !Array.isArray(flashcards) || flashcards.length === 0) {
+      console.error('❌ No valid flashcards to save');
+      console.log(`============================`);
+      return false;
+    }
+    
+    // First check if flashcard_sets table exists, create it if not
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS flashcard_sets (
+        id SERIAL PRIMARY KEY,
+        user_email TEXT NOT NULL,
+        summary_id INTEGER REFERENCES summaries(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log(`✅ Verified flashcard_sets table exists`);
+    
+    // Then check if flashcards table exists, create it if not
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS flashcards (
+        id SERIAL PRIMARY KEY,
+        set_id INTEGER REFERENCES flashcard_sets(id) ON DELETE CASCADE,
+        question TEXT NOT NULL,
+        answer TEXT NOT NULL,
+        incorrect_answers TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log(`✅ Verified flashcards table exists`);
+    
+    // Check if a set already exists for this summary
+    const existingSetResult = await db.query(
+      `SELECT id FROM flashcard_sets WHERE summary_id = $1 AND user_email = $2`,
+      [summaryId, userEmail]
+    );
+    
+    let setId;
+    
+    if (existingSetResult.rows.length > 0) {
+      setId = existingSetResult.rows[0].id;
+      console.log(`🔄 Found existing flashcard set (ID: ${setId}), updating...`);
+      
+      // Delete existing flashcards for this set
+      await db.query(`DELETE FROM flashcards WHERE set_id = $1`, [setId]);
+      console.log(`🗑️ Deleted existing flashcards for set ${setId}`);
+      
+      // Update the set's title and timestamp
+      await db.query(
+        `UPDATE flashcard_sets SET title = $1, created_at = NOW() WHERE id = $2`,
+        [title || 'Flashcards from Summary', setId]
+      );
+    } else {
+      // Insert new flashcard set
+      const setResult = await db.query(
+        `INSERT INTO flashcard_sets (user_email, summary_id, title, created_at) 
+        VALUES ($1, $2, $3, NOW()) 
+        RETURNING id`,
+        [userEmail, summaryId, title || 'Flashcards from Summary']
+      );
+      
+      setId = setResult.rows[0].id;
+      console.log(`✅ Created new flashcard set with ID: ${setId}`);
+    }
+    
+    // Insert flashcards
+    for (const card of flashcards) {
+      await db.query(
+        `INSERT INTO flashcards (set_id, question, answer, incorrect_answers) 
+         VALUES ($1, $2, $3, $4)`,
+        [setId, card.question, card.answer, 
+         card.incorrectAnswers && Array.isArray(card.incorrectAnswers) 
+           ? JSON.stringify(card.incorrectAnswers) 
+           : null
+        ]
+      );
+    }
+    
+    console.log(`✅ Successfully saved ${flashcards.length} flashcards for set ${setId}`);
+    console.log(`============================`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error saving flashcards to database: ${error.message}`);
+    console.log(`============================`);
+    return false;
+  }
+}
+
+// Helper function to extract user email from token
+const getUserEmailFromToken = (token) => {
+  console.log('Extracting user email from token');
+  if (!token) {
+    console.log('No token provided');
+    return null;
+  }
+  
+  try {
+    console.log('Token format:', token.split('.').length === 3 ? 'JWT format' : 'Non-JWT format');
+    
+    // Try JWT format
+    if (token.split('.').length === 3) {
+      const payload = token.split('.')[1];
+      const decoded = Buffer.from(payload, 'base64').toString();
+      const tokenData = JSON.parse(decoded);
+      console.log('JWT payload:', tokenData);
+      
+      if (tokenData && tokenData.email) {
+        console.log('Found email in JWT:', tokenData.email);
+        return tokenData.email;
+      }
+    }
+    
+    // Try direct base64 format
+    try {
+      const directDecoded = Buffer.from(token, 'base64').toString();
+      const directData = JSON.parse(directDecoded);
+      console.log('Direct decode payload:', directData);
+      
+      if (directData && directData.email) {
+        console.log('Found email in direct decode:', directData.email);
+        return directData.email;
+      }
+      
+      if (directData && directData.user && directData.user.email) {
+        console.log('Found email in user object:', directData.user.email);
+        return directData.user.email;
+      }
+    } catch (e) {
+      console.log('Direct decode failed:', e.message);
+    }
+    
+    console.log('Failed to extract email from token');
+    return null;
+  } catch (err) {
+    console.log('Error parsing token:', err.message);
+    return null;
+  }
+};
+
 // Process audio endpoint - for file uploads
-app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => {
+app.post('/api/process-audio', authMiddleware, flexibleUpload, async (req, res) => {
   try {
     console.log(`Processing audio file: ${req.file.path}`);
     
@@ -194,7 +456,8 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
       transcription: result.transcript || result.summary // If transcript is available, use it; otherwise use summary
     };
 
-    // Save to database if we have content
+    // Save summary to database if we have content
+    let summaryId = null;
     if (responseData.content) {
       try {
         const query = `
@@ -212,7 +475,18 @@ app.post('/api/process-audio', verifyToken, flexibleUpload, async (req, res) => 
         ];
         
         const dbResult = await db.query(query, values);
-        console.log(`Summary saved to database with ID: ${dbResult.rows[0].id}`);
+        summaryId = dbResult.rows[0].id;
+        console.log(`Summary saved to database with ID: ${summaryId}`);
+        
+        // Generate and save flashcards if summary was created
+        if (summaryId && !onlyTranscribe) {
+          console.log('Generating flashcards for summary...');
+          const flashcards = await generateFlashcardsWithGemini(responseData.content, responseData.title);
+          if (flashcards && flashcards.length > 0) {
+            await saveFlashcardsToDatabase(flashcards, summaryId, responseData.title, req.user.email);
+            console.log(`Successfully generated and saved ${flashcards.length} flashcards`);
+          }
+        }
       } catch (dbError) {
         console.error('Database error:', dbError);
         // Continue with the response even if database save fails
@@ -367,6 +641,7 @@ app.post('/api/process-recording', async (req, res) => {
         await cleanupAllFiles([tempFilePath], { cleanDebugFiles: true });
         
         // Save to database if we have content
+        let summaryId = null;
         if (result.summary) {
           try {
             const query = `
@@ -384,7 +659,18 @@ app.post('/api/process-recording', async (req, res) => {
             ];
             
             const dbResult = await db.query(query, values);
-            console.log(`Summary saved to database with ID: ${dbResult.rows[0].id}`);
+            summaryId = dbResult.rows[0].id;
+            console.log(`Summary saved to database with ID: ${summaryId}`);
+            
+            // Generate and save flashcards if summary was created
+            if (summaryId && !onlyTranscribe) {
+              console.log('Generating flashcards for summary...');
+              const flashcards = await generateFlashcardsWithGemini(result.summary, 'Audio Recording');
+              if (flashcards && flashcards.length > 0) {
+                await saveFlashcardsToDatabase(flashcards, summaryId, 'Audio Recording', userEmail);
+                console.log(`Successfully generated and saved ${flashcards.length} flashcards`);
+              }
+            }
           } catch (dbError) {
             console.error('Database error:', dbError);
             // Continue with the response even if database save fails
@@ -444,79 +730,158 @@ app.post('/api/process-recording', async (req, res) => {
   }
 });
 
-// Add a periodic cleanup job to remove old temporary files
-const CLEANUP_INTERVAL = 60 * 60 * 1000; // Run cleanup every hour
-
-async function cleanupOldTempFiles() {
-  console.log('Running scheduled cleanup of temporary files...');
-  
-  const tempDir = path.join(__dirname, 'temp');
-  const uploadsDir = path.join(__dirname, 'uploads');
-  const MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
-  const now = Date.now();
-  
-  // Define audio extensions to clean up
-  const audioExtensions = ['.mp3', '.mp4', '.wav', '.m4a', '.webm', '.aac', '.ogg'];
-  
-  // Clean up temp directory
+// Flashcard sets endpoint
+app.get('/api/flashcard-sets', async (req, res) => {
   try {
-    if (fs.existsSync(tempDir)) {
-      const tempFiles = fs.readdirSync(tempDir)
-        .map(file => path.join(tempDir, file))
-        .filter(file => {
-          try {
-            const stats = fs.statSync(file);
-            // Delete audio files regardless of age
-            const ext = path.extname(file).toLowerCase();
-            if (audioExtensions.includes(ext) || file.includes('compressed_')) {
-              return true;
-            }
-            // Delete other temp files if they're older than MAX_AGE
-            return now - stats.mtimeMs > MAX_AGE;
-          } catch (err) {
-            return false;
-          }
-        });
-      
-      console.log(`Found ${tempFiles.length} files to clean up in temp directory`);
-      await cleanupAllFiles(tempFiles);
+    console.log('🔍 Getting flashcard sets');
+    
+    // Extract user email from token
+    const token = req.headers.authorization?.split(' ')[1];
+    const userEmail = getUserEmailFromToken(token);
+    
+    if (!userEmail) {
+      console.log('❌ No user email found in token');
+      return res.status(401).json({ 
+        success: false, 
+        message: 'User authentication required' 
+      });
     }
-  } catch (error) {
-    console.error('Error cleaning temp directory:', error);
-  }
-  
-  // Clean up uploads directory
-  try {
-    if (fs.existsSync(uploadsDir)) {
-      const uploadFiles = fs.readdirSync(uploadsDir)
-        .map(file => path.join(uploadsDir, file))
-        .filter(file => {
-          try {
-            const stats = fs.statSync(file);
-            // Delete audio files regardless of age
-            const ext = path.extname(file).toLowerCase();
-            if (audioExtensions.includes(ext) || file.includes('compressed_')) {
-              return true;
-            }
-            // Delete other upload files if they're older than MAX_AGE
-            return now - stats.mtimeMs > MAX_AGE;
-          } catch (err) {
-            return false;
-          }
-        });
-      
-      console.log(`Found ${uploadFiles.length} files to clean up in uploads directory`);
-      await cleanupAllFiles(uploadFiles);
+    
+    console.log(`🔍 Getting flashcard sets for user: ${userEmail}`);
+    
+    // Get flashcard sets for this user
+    const result = await db.query(
+      'SELECT * FROM flashcard_sets WHERE user_email = $1 ORDER BY created_at DESC',
+      [userEmail]
+    );
+    
+    console.log(`✅ Found ${result.rows.length} flashcard sets for ${userEmail}`);
+    if (result.rows.length > 0) {
+      console.log('First set:', result.rows[0]);
     }
+    
+    return res.json({
+      success: true,
+      flashcardSets: result.rows
+    });
   } catch (error) {
-    console.error('Error cleaning uploads directory:', error);
+    console.error('Error fetching flashcard sets:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching flashcard sets' });
   }
-}
+});
 
-// Start the periodic cleanup
-setInterval(cleanupOldTempFiles, CLEANUP_INTERVAL);
-// Also run it once when the server starts
-cleanupOldTempFiles();
+// Get flashcards by summary ID
+app.get('/api/flashcards/by-summary/:summaryId', async (req, res) => {
+  try {
+    const { summaryId } = req.params;
+    console.log(`🔍 Getting flashcards for summary ${summaryId}`);
+    
+    // Extract user email from token
+    const token = req.headers.authorization?.split(' ')[1];
+    const userEmail = getUserEmailFromToken(token);
+    
+    if (!userEmail) {
+      console.log('❌ No user email found in token');
+      return res.status(401).json({ 
+        success: false, 
+        message: 'User authentication required' 
+      });
+    }
+    
+    console.log(`🔍 Getting flashcards for summary ${summaryId} and user ${userEmail}`);
+    
+    // Find flashcard set for this summary
+    const setResult = await db.query(
+      'SELECT * FROM flashcard_sets WHERE summary_id = $1 AND user_email = $2',
+      [summaryId, userEmail]
+    );
+    
+    // If no set exists, return 404
+    if (setResult.rows.length === 0) {
+      console.log(`❌ No flashcard set found for summary ${summaryId} and user ${userEmail}`);
+      return res.status(404).json({ 
+        success: false, 
+        message: 'No flashcard set found for this summary' 
+      });
+    }
+    
+    console.log(`✅ Found flashcard set ${setResult.rows[0].id} for summary ${summaryId}`);
+    
+    // If we have a set, get the flashcards
+    const setId = setResult.rows[0].id;
+    const cardsResult = await db.query(
+      'SELECT id, question, answer, incorrect_answers FROM flashcards WHERE set_id = $1 ORDER BY id',
+      [setId]
+    );
+    
+    console.log(`✅ Found ${cardsResult.rows.length} flashcards for set ${setId}`);
+    if (cardsResult.rows.length > 0) {
+      console.log('Sample card:', {
+        question: cardsResult.rows[0].question,
+        answer: cardsResult.rows[0].answer,
+        hasIncorrectAnswers: cardsResult.rows[0].incorrect_answers ? 'Yes' : 'No'
+      });
+    }
+    
+    return res.json({
+      success: true,
+      flashcardSet: {
+        id: setResult.rows[0].id,
+        title: setResult.rows[0].title,
+        created_at: setResult.rows[0].created_at,
+        flashcards: cardsResult.rows.map(card => ({
+          id: card.id,
+          question: card.question,
+          answer: card.answer,
+          incorrectAnswers: card.incorrect_answers ? JSON.parse(card.incorrect_answers) : null
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching flashcards by summary:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching flashcards by summary' 
+    });
+  }
+});
+
+// Endpoint for generating flashcards with Gemini (kept for backward compatibility)
+app.post('/api/generate-flashcards', async (req, res) => {
+  try {
+    const { content, title } = req.body;
+    
+    if (!content) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Content is required for flashcard generation' 
+      });
+    }
+    
+    const flashcards = await generateFlashcardsWithGemini(content, title);
+    
+    if (!flashcards) {
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to generate flashcards'
+      });
+    }
+    
+    // Success - return the flashcards
+    return res.json({
+      success: true,
+      flashcards: flashcards
+    });
+    
+  } catch (error) {
+    console.error('Error generating flashcards with Gemini:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Failed to generate flashcards', 
+      error: error.message 
+    });
+  }
+});
 
 // Login endpoint
 app.post('/api/login', async (req, res) => {
@@ -768,7 +1133,7 @@ app.get('/api/user-first-name', async (req, res) => {
 });
 
 // Update usage endpoint
-app.post('/api/update-usage', verifyToken, async (req, res) => {
+app.post('/api/update-usage', authMiddleware, async (req, res) => {
   const userEmail = req.user.email;
 
   try {
@@ -937,6 +1302,73 @@ const server = app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 
+// Function to clean up old temporary files
+async function cleanupOldTempFiles() {
+  console.log('Running scheduled cleanup of temporary files...');
+  
+  const tempDir = path.join(__dirname, 'temp');
+  const uploadsDir = path.join(__dirname, 'uploads');
+  const MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
+  const now = Date.now();
+  
+  // Define audio extensions to clean up
+  const audioExtensions = ['.mp3', '.mp4', '.wav', '.m4a', '.webm', '.aac', '.ogg'];
+  
+  // Clean up temp directory
+  try {
+    if (fs.existsSync(tempDir)) {
+      const tempFiles = fs.readdirSync(tempDir)
+        .map(file => path.join(tempDir, file))
+        .filter(file => {
+          try {
+            const stats = fs.statSync(file);
+            // Delete audio files regardless of age
+            const ext = path.extname(file).toLowerCase();
+            if (audioExtensions.includes(ext) || file.includes('compressed_')) {
+              return true;
+            }
+            // Delete other temp files if they're older than MAX_AGE
+            return now - stats.mtimeMs > MAX_AGE;
+          } catch (err) {
+            return false;
+          }
+        });
+      
+      console.log(`Found ${tempFiles.length} files to clean up in temp directory`);
+      await cleanupAllFiles(tempFiles);
+    }
+  } catch (error) {
+    console.error('Error cleaning temp directory:', error);
+  }
+  
+  // Clean up uploads directory
+  try {
+    if (fs.existsSync(uploadsDir)) {
+      const uploadFiles = fs.readdirSync(uploadsDir)
+        .map(file => path.join(uploadsDir, file))
+        .filter(file => {
+          try {
+            const stats = fs.statSync(file);
+            // Delete audio files regardless of age
+            const ext = path.extname(file).toLowerCase();
+            if (audioExtensions.includes(ext) || file.includes('compressed_')) {
+              return true;
+            }
+            // Delete other upload files if they're older than MAX_AGE
+            return now - stats.mtimeMs > MAX_AGE;
+          } catch (err) {
+            return false;
+          }
+        });
+      
+      console.log(`Found ${uploadFiles.length} files to clean up in uploads directory`);
+      await cleanupAllFiles(uploadFiles);
+    }
+  } catch (error) {
+    console.error('Error cleaning uploads directory:', error);
+  }
+}
+
 // Schedule cleanup job to run every hour - this will clean up any temporary files
 // that may have been left behind
 const cleanupJob = setInterval(cleanupOldTempFiles, 60 * 60 * 1000); // 1 hour
@@ -995,5 +1427,57 @@ app.get('/api/payment-success', async (req, res) => {
       success: false,
       message: 'Error processing payment success'
     });
+  }
+});
+
+// Get all flashcards for games (filtered by user token)
+app.get('/api/all-flashcards', async (req, res) => {
+  try {
+    console.log('GET /api/all-flashcards - Fetching flashcards for games');
+    
+    // Extract user email from token
+    let userEmail = null;
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    if (token) {
+      userEmail = getUserEmailFromToken(token);
+      console.log('User email from token:', userEmail);
+    } else {
+      console.log('No authorization token provided');
+    }
+    
+    // If no user email found, return empty array
+    if (!userEmail) {
+      console.log('No valid user email found, returning empty array');
+      return res.json([]);
+    }
+    
+    // Get all sets and their flashcards for this user
+    const query = `
+      SELECT 
+        f.id, 
+        f.question, 
+        f.answer, 
+        f.incorrect_answers as wrong_answers,
+        fs.id as set_id, 
+        fs.title as set_title
+      FROM 
+        flashcards f
+      JOIN 
+        flashcard_sets fs ON f.set_id = fs.id
+      WHERE
+        fs.user_email = $1
+      ORDER BY 
+        fs.id, f.id
+    `;
+    
+    const result = await db.query(query, [userEmail]);
+    console.log(`Found ${result.rows.length} flashcards for user ${userEmail}`);
+    
+    // Return all flashcards for this user
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching flashcards:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
