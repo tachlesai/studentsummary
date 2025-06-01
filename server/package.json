@@ -31,5 +31,11 @@
     "util": "^0.12.5",
     "youtube-dl-exec": "^3.0.12",
     "youtube-transcript-api": "^1.1.2"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "overrides": {
+    "pg": "^8.11.0"
   }
 }

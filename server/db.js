@@ -1,9 +1,22 @@
-import pkg from 'pg';
-const { Pool } = pkg;
 import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
+
+// Dynamically import pg to work around ESM/CJS issues
+const pg = await (async () => {
+  try {
+    // Try ESM import first
+    return await import('pg');
+  } catch (e) {
+    console.log('ESM import failed, trying CommonJS import');
+    // Fallback to CommonJS
+    const pg = await import('pg/lib/index.js');
+    return pg;
+  }
+})();
+
+const { Pool } = pg.default || pg;
 
 let dbConfig;
 
@@ -14,7 +27,12 @@ console.log(`Running in ${isProduction ? 'production' : 'development'} mode`);
 // First try to use DATABASE_URL if it exists (common in production deployments)
 if (process.env.DATABASE_URL) {
   console.log('Using DATABASE_URL for connection');
-  console.log('Connection to:', process.env.DATABASE_URL.split('@')[1].split('/')[0]); // Log host without credentials
+  try {
+    const hostInfo = process.env.DATABASE_URL.split('@')[1].split('/')[0];
+    console.log('Connection to host:', hostInfo);
+  } catch (e) {
+    console.log('Could not parse DATABASE_URL for logging');
+  }
   dbConfig = {
     connectionString: process.env.DATABASE_URL,
     // Railway requires SSL for PostgreSQL connections
