@@ -1,10 +1,9 @@
-import pg from 'pg';
+import pkg from 'pg';
+const { Pool } = pkg;
 import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
-
-const { Pool } = pg;
 
 let dbConfig;
 
@@ -15,6 +14,7 @@ console.log(`Running in ${isProduction ? 'production' : 'development'} mode`);
 // First try to use DATABASE_URL if it exists (common in production deployments)
 if (process.env.DATABASE_URL) {
   console.log('Using DATABASE_URL for connection');
+  console.log('Connection to:', process.env.DATABASE_URL.split('@')[1].split('/')[0]); // Log host without credentials
   dbConfig = {
     connectionString: process.env.DATABASE_URL,
     // Railway requires SSL for PostgreSQL connections
