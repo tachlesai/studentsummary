@@ -4,7 +4,7 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node -e \"const fs = require('fs'); const path = require('path'); const cryptoDir = path.join(__dirname, 'node_modules/pg/lib/crypto'); if (!fs.existsSync(cryptoDir)) { fs.mkdirSync(cryptoDir, { recursive: true }); } fs.copyFileSync(path.join(__dirname, 'cert-signatures.js'), path.join(cryptoDir, 'cert-signatures.js')); console.log('Added compatibility file for pg');\" && node server.js"
   },
   "keywords": [],
   "author": "",
