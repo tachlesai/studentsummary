@@ -3,6 +3,9 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
+// Force IPv4 connections to avoid ENETUNREACH with IPv6 addresses
+process.env.PGSSLMODE = 'prefer';
+
 // Dynamically import pg to work around ESM/CJS issues
 const pg = await (async () => {
   try {
@@ -36,7 +39,9 @@ if (process.env.DATABASE_URL) {
   dbConfig = {
     connectionString: process.env.DATABASE_URL,
     // Railway requires SSL for PostgreSQL connections
-    ssl: isProduction ? { rejectUnauthorized: false } : false
+    ssl: isProduction ? { rejectUnauthorized: false } : false,
+    // Force IPv4 connections
+    family: 4
   };
 } else {
   // Otherwise use individual environment variables
@@ -49,7 +54,9 @@ if (process.env.DATABASE_URL) {
     database: process.env.DB_NAME || 'studentsummary',
     ssl: isProduction && process.env.SSL_ENABLED === 'true' 
       ? { rejectUnauthorized: false } 
-      : false
+      : false,
+    // Force IPv4 connections
+    family: 4
   };
 }
 
@@ -75,10 +82,19 @@ pool.connect()
   })
   .catch(err => {
     console.error('Database connection error:', err);
+    
+    // More detailed error logging
+    if (err.code === 'ENETUNREACH') {
+      console.error('Network unreachable error. This is typically an IPv6/IPv4 issue.');
+      console.error('Host attempted:', err.address);
+      console.error('Port:', err.port);
+    }
+    
     // If SSL error in production, provide more helpful error
     if (isProduction && err.message.includes('SSL')) {
       console.error('SSL Error: If running locally in production mode, set SSL_ENABLED=false in .env');
     }
+    
     // Log the full connection details for debugging (except password)
     if (isProduction) {
       console.error('Connection details:', {
@@ -88,7 +104,8 @@ pool.connect()
           database: dbConfig.database,
           port: dbConfig.port,
         }),
-        ssl: dbConfig.ssl
+        ssl: dbConfig.ssl,
+        family: dbConfig.family
       });
     }
   });
