@@ -10,6 +10,8 @@ import { Slider } from '../../components/ui/slider';
 import { useToast } from '../../components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { getRandomItems, shuffleArray } from '../../lib/utils';
+import API_BASE_URL from '../../config';
+import { getAuthToken } from '../../utils/auth';
 
 const SpeedChallengeGame = () => {
   const { toast } = useToast();
@@ -31,6 +33,28 @@ const SpeedChallengeGame = () => {
 
   const debugMode = true;
 
+  const fetchFlashcards = async () => {
+    try {
+      const token = getAuthToken();
+      
+      const response = await fetch(`${API_BASE_URL}/all-flashcards`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching flashcards:', error);
+      return [];
+    }
+  };
+
   // Directly fetch flashcards when component mounts
   useEffect(() => {
     const fetchAllFlashcards = async () => {
@@ -38,22 +62,7 @@ const SpeedChallengeGame = () => {
         setLoading(true);
         console.log("SPEED GAME - Directly fetching all flashcards");
         
-        // Get token from localStorage
-        const token = localStorage.getItem('token');
-        
-        // Simple fetch request to get all flashcards
-        const response = await fetch('http://localhost:5001/api/all-flashcards', {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': token ? `Bearer ${token}` : ''
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch flashcards');
-        }
-        
-        const data = await response.json();
+        const data = await fetchFlashcards();
         console.log("Fetched flashcards:", data);
         
         // Group flashcards by set for selection

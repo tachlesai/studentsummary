@@ -8,6 +8,8 @@ import { useFlashcards } from '../../hooks/useFlashcards';
 import { useToast } from '../../components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { getRandomItems, shuffleArray } from '../../lib/utils';
+import API_BASE_URL from '../../config';
+import { getAuthToken } from '../../utils/auth';
 
 const QuizGame = () => {
   const [questions, setQuestions] = useState([]);
@@ -33,19 +35,18 @@ const QuizGame = () => {
       try {
         console.log("QUIZ GAME - Directly fetching all flashcards");
         
-        // Get token from localStorage
-        const token = localStorage.getItem('token');
+        // Use getAuthToken instead of directly accessing localStorage
+        const token = getAuthToken();
         
-        // Simple fetch request to get all flashcards
-        const response = await fetch('http://localhost:5001/api/all-flashcards', {
+        // Use API_BASE_URL instead of hardcoded URL
+        const response = await fetch(`${API_BASE_URL}/all-flashcards`, {
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': token ? `Bearer ${token}` : ''
+            'Authorization': `Bearer ${token}`
           }
         });
         
         if (!response.ok) {
-          throw new Error('Failed to fetch flashcards');
+          throw new Error(`Error: ${response.status}`);
         }
         
         const data = await response.json();
