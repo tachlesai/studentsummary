@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import API_BASE_URL from '../config';
+import { setUser, setToken } from '../utils/auth';
 
 function Login() {
   const navigate = useNavigate();
@@ -33,23 +34,28 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
     setError('');
     setSuccess(false);
-    setIsLoading(true);
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        // Use the improved auth functions
+        setToken(data.token);
+        setUser(data.user);
         setSuccess(true);
+        
+        // Redirect to home page after 2 seconds
         setTimeout(() => {
           navigate('/');
           window.location.reload();
@@ -58,7 +64,7 @@ function Login() {
         setError(data.message || 'שגיאה בהתחברות');
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Login error:', error);
       setError('שגיאה בהתחברות');
     } finally {
       setIsLoading(false);
@@ -73,6 +79,10 @@ function Login() {
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
+    setIsLoading(true);
+    setError('');
+    setSuccess(false);
+
     try {
       const response = await fetch(`${API_BASE_URL}/google-login`, {
         method: 'POST',
@@ -80,15 +90,16 @@ function Login() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          credential: credentialResponse.credential
-        })
+          credential: credentialResponse.credential,
+        }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        // Use the improved auth functions
+        setToken(data.token);
+        setUser(data.user);
         setSuccess(true);
         
         // Redirect to home page after 2 seconds
@@ -102,6 +113,8 @@ function Login() {
     } catch (error) {
       console.error('Error:', error);
       setError('שגיאה בהתחברות עם גוגל');
+    } finally {
+      setIsLoading(false);
     }
   };
 

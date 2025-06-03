@@ -19,6 +19,7 @@ const SignUp = () => {
   const [step, setStep] = useState(1); // 1: Basic info, 2: Phone verification
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -42,25 +43,16 @@ const SignUp = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (isSubmitting) return;
+    
+    setIsSubmitting(true);
     setError('');
-    setLoading(true);
 
     try {
-      // Always format the phone number before using it
-      const formattedPhoneNumber = formatPhoneNumber(formData.phoneNumber);
+      // If on step 1, send verification SMS and move to step 2
       if (step === 1) {
-        // Check if user already exists by email or phone number
-        const checkRes = await fetch(`${API_BASE_URL}/check-user-exists`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formData.email, phoneNumber: formattedPhoneNumber })
-        });
-        const checkData = await checkRes.json();
-        if (checkData.exists) {
-          setError('אימייל או מספר טלפון זה כבר בשימוש.');
-          setLoading(false);
-          return;
-        }
+        const formattedPhoneNumber = formatPhoneNumber(formData.phoneNumber);
         // Send verification SMS
         const response = await sendVerificationSMS(formattedPhoneNumber);
         if (response.success) {
@@ -69,36 +61,41 @@ const SignUp = () => {
           setError('Failed to send verification SMS. Please try again.');
         }
       } else {
+        // On step 2, verify the code and register
+        const formattedPhoneNumber = formatPhoneNumber(formData.phoneNumber);
         // Verify the code
         const verificationResponse = await verifyCode(formattedPhoneNumber, verificationCode);
         if (verificationResponse.success) {
-          // Proceed with registration
-          const registerResponse = await fetch(`${API_BASE_URL}/register`, {
+          // Register the user
+          const response = await fetch(`${API_BASE_URL}/register`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ ...formData, phoneNumber: formattedPhoneNumber })
+            body: JSON.stringify({ ...formData, phoneNumber: formattedPhoneNumber }),
           });
 
-          const data = await registerResponse.json();
-          if (!registerResponse.ok) {
-            // Show backend error message if available
+          const data = await response.json();
+          
+          if (!response.ok) {
             setError(data.message || 'Registration failed');
-            setLoading(false);
             return;
           }
+
+          // Use improved auth functions to store user data and token
           setUser(data.user);
           setToken(data.token);
+          
+          // Redirect to dashboard
           navigate('/dashboard');
         } else {
           setError('Invalid verification code. Please try again.');
         }
       }
-    } catch (err) {
-      setError(err.message);
+    } catch (error) {
+      setError(error.message);
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 

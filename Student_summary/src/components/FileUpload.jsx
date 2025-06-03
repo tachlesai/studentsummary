@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import '../styles/FileUpload.css';
 import API_BASE_URL from '../config';
+import { getAuthToken } from '../utils/auth';
 
 function FileUpload() {
   const [file, setFile] = useState(null);
@@ -35,7 +36,16 @@ function FileUpload() {
     formData.append('audioFile', file);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getAuthToken();
+      
+      if (!token) {
+        setError('You need to be logged in to upload files');
+        setLoading(false);
+        return;
+      }
+
+      console.log('Using auth token (first 10 chars):', token.substring(0, 10) + '...');
+      
       const response = await fetch(`${API_BASE_URL}/process-audio`, {
         method: 'POST',
         headers: {
