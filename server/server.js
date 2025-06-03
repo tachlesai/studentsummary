@@ -75,7 +75,7 @@ const authMiddleware = (req, res, next) => {
   try {
     // Try to verify as JWT token
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
       req.user = decoded;
       console.log('✅ JWT auth successful for:', decoded.email);
       return next();
@@ -83,19 +83,29 @@ const authMiddleware = (req, res, next) => {
       console.log('ℹ️ JWT verification failed, trying base64 format');
       
       // If JWT verification fails, try to decode as base64 for development testing
-      const base64Decoded = Buffer.from(token, 'base64').toString('utf-8');
-      const userData = JSON.parse(base64Decoded);
-      
-      if (userData && userData.user && userData.user.email) {
-        // For development only - accept simple base64 tokens
-        req.user = userData.user;
-        console.log('✅ Base64 auth accepted for dev testing:', userData.user.email);
-        return next();
+      try {
+        const base64Decoded = Buffer.from(token, 'base64').toString('utf-8');
+        
+        // Validate that the decoded string is valid JSON before parsing
+        if (!base64Decoded || base64Decoded.trim() === '' || 
+            !base64Decoded.startsWith('{') && !base64Decoded.startsWith('[')) {
+          throw new Error('Invalid base64 format: decoded content is not valid JSON');
+        }
+        
+        const userData = JSON.parse(base64Decoded);
+        
+        if (userData && userData.user && userData.user.email) {
+          // For development only - accept simple base64 tokens
+          req.user = userData.user;
+          console.log('✅ Base64 auth accepted for dev testing:', userData.user.email);
+          return next();
+        } else {
+          throw new Error('Invalid token structure: missing user.email');
+        }
+      } catch (base64Error) {
+        console.log('❌ Base64 decoding/parsing failed:', base64Error.message);
+        throw new Error(`Base64 token invalid: ${base64Error.message}`);
       }
-      
-      // If both methods fail, return error
-      console.log('❌ Authentication failed');
-      return res.status(401).json({ success: false, message: 'Invalid token' });
     }
   } catch (err) {
     console.error('❌ Auth error:', err);
