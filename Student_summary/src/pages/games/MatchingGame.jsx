@@ -115,7 +115,9 @@ const MatchingGame = () => {
   }, [matchedPairs, cards.length, moves, timer, timerInterval, toast, gameStarted]);
 
   const startGame = useCallback((setId) => {
-    const selectedSet = flashcardSets.find(set => set.id === setId);
+    const selectedSetFromProps = flashcardSets.find(set => set.id === setId);
+    let selectedSet = selectedSetFromProps;
+    
     if (debugMode && (!selectedSet || selectedSet.flashcards.length < 4)) {
       const debugCards = [
         { id: 'd1', question: "שאלת דוגמה 1", answer: "תשובה לדוגמה 1" },

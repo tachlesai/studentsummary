@@ -114,7 +114,9 @@ const SpeedChallengeGame = () => {
   }, [timeRemaining]);
 
   const startGame = (setId) => {
-    const selectedSet = flashcardSets.find(set => set.id === setId);
+    const selectedSetFromProps = flashcardSets.find(set => set.id === setId);
+    let selectedSet = selectedSetFromProps;
+    
     if (debugMode && (!selectedSet || selectedSet.flashcards.length < 5)) {
       // Create debug flashcards
       const debugCards = [

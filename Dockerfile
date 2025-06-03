@@ -1,10 +1,18 @@
 FROM node:18.16.1 AS frontend-build
 
 WORKDIR /frontend-build
-COPY Student_summary/package*.json ./
-RUN npm install --production=false
 
+# Copy package files and .npmrc first for better caching
+COPY Student_summary/package*.json ./
+COPY Student_summary/.npmrc ./
+
+# Install all dependencies including dev dependencies
+RUN npm install
+
+# Copy the rest of the frontend code
 COPY Student_summary ./
+
+# Build the frontend
 RUN npm run build
 
 FROM node:18.16.1
@@ -16,8 +24,8 @@ COPY server ./server/
 COPY package*.json ./
 
 # Install server dependencies
-RUN npm install --production=false
-RUN cd server && npm install --production=false
+RUN npm install
+RUN cd server && npm install
 
 # Setup the pg module compatibility
 RUN mkdir -p ./server/node_modules/pg/lib/crypto
