@@ -16,6 +16,19 @@ import dotenv from 'dotenv';
 // Load environment variables
 dotenv.config();
 
+// Define __filename and __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Debug environment variables
+console.log('==== ENVIRONMENT VARIABLE DEBUG ====');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('Twilio Account SID exists:', !!process.env.TWILIO_ACCOUNT_SID);
+console.log('Twilio Auth Token exists:', !!process.env.TWILIO_AUTH_TOKEN);
+console.log('Twilio Verify Service SID exists:', !!process.env.TWILIO_VERIFY_SERVICE_SID);
+console.log('All env variable names:', Object.keys(process.env).filter(key => key.includes('TWILIO')));
+console.log('====================================');
+
 const app = express();
 const port = process.env.PORT || 5001;
 console.log(`Using port: ${port}`);
@@ -64,10 +77,6 @@ app.use(cors(corsOptions));
 // Increase JSON body size limit to handle large audio recordings
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
-
-// Get __dirname equivalent in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // Serve static files from the frontend build directory
 const frontendPath = path.join(__dirname, '../Student_summary/dist');
@@ -1324,6 +1333,26 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Server is running' });
 });
 
+// Twilio credentials test endpoint
+app.get('/api/twilio-test', (req, res) => {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
+  
+  res.json({
+    environment: process.env.NODE_ENV,
+    hasSid: !!accountSid,
+    hasToken: !!authToken,
+    hasVerifySid: !!verifySid,
+    // Show first few characters of each to verify they're correct
+    sidPrefix: accountSid ? accountSid.substring(0, 4) : null,
+    tokenPrefix: authToken ? authToken.substring(0, 4) : null,
+    verifySidPrefix: verifySid ? verifySid.substring(0, 4) : null,
+    // List all environment variables that contain "TWILIO"
+    twilioVars: Object.keys(process.env).filter(key => key.includes('TWILIO'))
+  });
+});
+
 // Database test route - useful for diagnosing connection issues
 app.get('/api/db-test', async (req, res) => {
   try {
@@ -1583,10 +1612,15 @@ app.post('/api/send-verification', async (req, res) => {
     
     console.log(`Sending verification SMS to ${phoneNumber}`);
     
-    // Check if we have Twilio credentials
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
+    // Check for Twilio credentials with multiple possible environment variable names
+    const accountSid = process.env.TWILIO_ACCOUNT_SID || process.env.VITE_TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN || process.env.VITE_TWILIO_AUTH_TOKEN;
+    const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID || process.env.VITE_VERIFY_SERVICE_SID || process.env.VITE_TWILIO_VERIFY_SERVICE_SID;
+    
+    console.log('Twilio credentials check:');
+    console.log('- Account SID exists:', !!accountSid);
+    console.log('- Auth Token exists:', !!authToken);
+    console.log('- Verify SID exists:', !!verifySid);
     
     if (!accountSid || !authToken || !verifySid) {
       console.error('Missing Twilio credentials');
@@ -1596,13 +1630,16 @@ app.post('/api/send-verification', async (req, res) => {
         debug: { 
           hasSid: !!accountSid, 
           hasToken: !!authToken, 
-          hasVerifySid: !!verifySid 
+          hasVerifySid: !!verifySid,
+          envVars: Object.keys(process.env).filter(key => key.includes('TWILIO') || key.includes('VERIFY'))
         }
       });
     }
     
     // Make request to Twilio API
     const twilioUrl = `https://verify.twilio.com/v2/Services/${verifySid}/Verifications`;
+    
+    console.log(`Making request to Twilio API: ${twilioUrl}`);
     
     const twilioResponse = await fetch(twilioUrl, {
       method: 'POST',
@@ -1644,10 +1681,10 @@ app.post('/api/verify-code', async (req, res) => {
     
     console.log(`Verifying code for ${phoneNumber}`);
     
-    // Check if we have Twilio credentials
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
+    // Check for Twilio credentials with multiple possible environment variable names
+    const accountSid = process.env.TWILIO_ACCOUNT_SID || process.env.VITE_TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN || process.env.VITE_TWILIO_AUTH_TOKEN;
+    const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID || process.env.VITE_VERIFY_SERVICE_SID || process.env.VITE_TWILIO_VERIFY_SERVICE_SID;
     
     if (!accountSid || !authToken || !verifySid) {
       console.error('Missing Twilio credentials');
