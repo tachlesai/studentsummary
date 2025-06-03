@@ -12,6 +12,7 @@ import jwt from 'jsonwebtoken';
 
 const app = express();
 const port = process.env.PORT || 5001;
+console.log(`Using port: ${port}`);
 
 // CORS configuration
 const corsOptions = {
@@ -37,6 +38,11 @@ app.use(cors(corsOptions));
 // Increase JSON body size limit to handle large audio recordings
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+
+// Serve static files from the frontend build directory
+const frontendPath = path.join(__dirname, '../Student_summary/dist');
+console.log(`Serving static files from: ${frontendPath}`);
+app.use(express.static(frontendPath));
 
 // Middleware to fix double /api prefix issue
 app.use((req, res, next) => {
@@ -1297,6 +1303,78 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+// Get all flashcards for games (filtered by user token)
+app.get('/api/all-flashcards', async (req, res) => {
+  try {
+    console.log('GET /api/all-flashcards - Fetching flashcards for games');
+    
+    // Extract user email from token
+    let userEmail = null;
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    if (token) {
+      userEmail = getUserEmailFromToken(token);
+      console.log('User email from token:', userEmail);
+    } else {
+      console.log('No authorization token provided');
+    }
+    
+    // If no user email found, return empty array
+    if (!userEmail) {
+      console.log('No valid user email found, returning empty array');
+      return res.json([]);
+    }
+    
+    // Get all sets and their flashcards for this user
+    const query = `
+      SELECT 
+        f.id, 
+        f.question, 
+        f.answer, 
+        f.incorrect_answers as wrong_answers,
+        fs.id as set_id, 
+        fs.title as set_title
+      FROM 
+        flashcards f
+      JOIN 
+        flashcard_sets fs ON f.set_id = fs.id
+      WHERE
+        fs.user_email = $1
+      ORDER BY 
+        fs.id, f.id
+    `;
+    
+    const result = await db.query(query, [userEmail]);
+    console.log(`Found ${result.rows.length} flashcards for user ${userEmail}`);
+    
+    // Return all flashcards for this user
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching flashcards:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Catch-all route to serve the frontend for client-side routing
+app.get('*', (req, res) => {
+  // Skip API routes
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  
+  // Serve the index.html for all other routes
+  const indexPath = path.join(__dirname, '../Student_summary/dist/index.html');
+  console.log(`Serving index.html for path: ${req.path}`);
+  
+  // Check if the file exists before sending it
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    console.error(`Error: index.html not found at ${indexPath}`);
+    res.status(404).send('Frontend build not found. Please build the frontend first.');
+  }
+});
+
 // Start the server
 const server = app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
@@ -1427,57 +1505,5 @@ app.get('/api/payment-success', async (req, res) => {
       success: false,
       message: 'Error processing payment success'
     });
-  }
-});
-
-// Get all flashcards for games (filtered by user token)
-app.get('/api/all-flashcards', async (req, res) => {
-  try {
-    console.log('GET /api/all-flashcards - Fetching flashcards for games');
-    
-    // Extract user email from token
-    let userEmail = null;
-    const token = req.headers.authorization?.split(' ')[1];
-    
-    if (token) {
-      userEmail = getUserEmailFromToken(token);
-      console.log('User email from token:', userEmail);
-    } else {
-      console.log('No authorization token provided');
-    }
-    
-    // If no user email found, return empty array
-    if (!userEmail) {
-      console.log('No valid user email found, returning empty array');
-      return res.json([]);
-    }
-    
-    // Get all sets and their flashcards for this user
-    const query = `
-      SELECT 
-        f.id, 
-        f.question, 
-        f.answer, 
-        f.incorrect_answers as wrong_answers,
-        fs.id as set_id, 
-        fs.title as set_title
-      FROM 
-        flashcards f
-      JOIN 
-        flashcard_sets fs ON f.set_id = fs.id
-      WHERE
-        fs.user_email = $1
-      ORDER BY 
-        fs.id, f.id
-    `;
-    
-    const result = await db.query(query, [userEmail]);
-    console.log(`Found ${result.rows.length} flashcards for user ${userEmail}`);
-    
-    // Return all flashcards for this user
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching flashcards:', error);
-    res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -2,13 +2,13 @@ FROM node:18.16.1
 
 WORKDIR /app
 
-# Copy the server files
-COPY server ./server/
-COPY package*.json ./
+# Copy the entire project
+COPY . .
 
-# Install dependencies
+# Install dependencies and build frontend
 RUN npm install --production=false
 RUN cd server && npm install --production=false
+RUN cd Student_summary && npm install --production=false && npm run build
 
 # Setup the pg module compatibility
 RUN mkdir -p ./server/node_modules/pg/lib/crypto
