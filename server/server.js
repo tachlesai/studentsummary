@@ -10,10 +10,31 @@ import db from './db.js';
 import bcrypt from 'bcryptjs';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import jwt from 'jsonwebtoken';
+import http from 'http';
 
 const app = express();
 const port = process.env.PORT || 5001;
 console.log(`Using port: ${port}`);
+
+// Add this block to allow overriding the database host with an environment variable
+// This helps work around IPv6 connectivity issues
+if (process.env.DATABASE_URL && process.env.OVERRIDE_DB_HOST) {
+  try {
+    console.log('Overriding database host with OVERRIDE_DB_HOST:', process.env.OVERRIDE_DB_HOST);
+    // Extract parts from the DATABASE_URL
+    const regex = /postgres:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/;
+    const match = process.env.DATABASE_URL.match(regex);
+    
+    if (match) {
+      const [_, user, password, host, port, dbNameWithParams] = match;
+      // Create a new connection string with the overridden host
+      process.env.DATABASE_URL = `postgres://${user}:${password}@${process.env.OVERRIDE_DB_HOST}:${port}/${dbNameWithParams}`;
+      console.log('Database URL updated with new host');
+    }
+  } catch (e) {
+    console.error('Error overriding database host:', e);
+  }
+}
 
 // CORS configuration
 const corsOptions = {
@@ -1294,9 +1315,36 @@ app.get('/api/account-details', async (req, res) => {
   }
 });
 
-// Health check endpoint for Render
+// Health check route - should be accessible without authentication
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'Server is running' });
+});
+
+// Database test route - useful for diagnosing connection issues
+app.get('/api/db-test', async (req, res) => {
+  try {
+    // Simple query to test database connectivity
+    const result = await db.query('SELECT NOW() as time');
+    
+    // Return success with timestamp from database
+    return res.json({
+      success: true,
+      message: 'Database connection successful',
+      time: result.rows[0].time,
+      database_url: process.env.DATABASE_URL ? 'Set (value hidden)' : 'Not set'
+    });
+  } catch (error) {
+    console.error('Database test error:', error);
+    
+    // Return error details
+    return res.status(500).json({
+      success: false,
+      message: 'Database connection failed',
+      error: error.message,
+      code: error.code,
+      database_url: process.env.DATABASE_URL ? 'Set (value hidden)' : 'Not set'
+    });
+  }
 });
 
 // Serve static files in production

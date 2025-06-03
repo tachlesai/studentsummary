@@ -1,7 +1,11 @@
 import dotenv from 'dotenv';
+import dns from 'dns';
 
 // Load environment variables
 dotenv.config();
+
+// Configure DNS to prefer IPv4
+dns.setDefaultResultOrder('ipv4first');
 
 // Force IPv4 connections to avoid ENETUNREACH with IPv6 addresses
 process.env.PGSSLMODE = 'prefer';
@@ -30,14 +34,65 @@ console.log(`Running in ${isProduction ? 'production' : 'development'} mode`);
 // First try to use DATABASE_URL if it exists (common in production deployments)
 if (process.env.DATABASE_URL) {
   console.log('Using DATABASE_URL for connection');
+  
+  // Function to replace IPv6 address with hostname
+  const replaceIPv6WithHostname = (url) => {
+    try {
+      // Parse the connection string
+      const regex = /postgres:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/;
+      const match = url.match(regex);
+      
+      if (match) {
+        const [_, user, password, host, port, dbNameWithParams] = match;
+        
+        // Log the current host
+        console.log('Connection host:', host);
+        
+        // Check if this is an IPv6 address
+        if (host.includes(':')) {
+          console.log('IPv6 address detected in DATABASE_URL');
+          
+          // If we have a DB_HOSTNAME environment variable, use that
+          if (process.env.DB_HOSTNAME) {
+            const newHost = process.env.DB_HOSTNAME;
+            console.log(`Using DB_HOSTNAME: ${newHost}`);
+            return `postgres://${user}:${password}@${newHost}:${port}/${dbNameWithParams}`;
+          }
+          
+          // Try to extract the hostname from DB_HOST or use a fallback
+          // The hostname for a postgres database on Railway is usually containers-us-west-N.railway.app
+          // or a similar format for other providers
+          const dbHost = process.env.DB_HOST || 'containers-us-west-181.railway.app';
+          console.log(`Using alternative hostname: ${dbHost}`);
+          
+          // Construct a new connection string
+          return `postgres://${user}:${password}@${dbHost}:${port}/${dbNameWithParams}`;
+        }
+      }
+      return url;
+    } catch (e) {
+      console.log('Error processing DATABASE_URL:', e.message);
+      return url;
+    }
+  };
+  
+  // Get the connection string with potentially modified host
+  const connectionString = replaceIPv6WithHostname(process.env.DATABASE_URL);
+  
+  // Check if connection string was modified
+  if (connectionString !== process.env.DATABASE_URL) {
+    console.log('Using modified DATABASE_URL with hostname instead of IPv6');
+  }
+  
   try {
-    const hostInfo = process.env.DATABASE_URL.split('@')[1].split('/')[0];
+    const hostInfo = connectionString.split('@')[1].split('/')[0];
     console.log('Connection to host:', hostInfo);
   } catch (e) {
     console.log('Could not parse DATABASE_URL for logging');
   }
+  
   dbConfig = {
-    connectionString: process.env.DATABASE_URL,
+    connectionString,
     // Railway requires SSL for PostgreSQL connections
     ssl: isProduction ? { rejectUnauthorized: false } : false,
     // Force IPv4 connections
