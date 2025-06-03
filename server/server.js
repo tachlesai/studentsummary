@@ -11,6 +11,10 @@ import bcrypt from 'bcryptjs';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import jwt from 'jsonwebtoken';
 import http from 'http';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -1565,5 +1569,120 @@ app.get('/api/payment-success', async (req, res) => {
       success: false,
       message: 'Error processing payment success'
     });
+  }
+});
+
+// Twilio SMS verification endpoints
+app.post('/api/send-verification', async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+    
+    if (!phoneNumber) {
+      return res.status(400).json({ success: false, message: 'Phone number is required' });
+    }
+    
+    console.log(`Sending verification SMS to ${phoneNumber}`);
+    
+    // Check if we have Twilio credentials
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
+    
+    if (!accountSid || !authToken || !verifySid) {
+      console.error('Missing Twilio credentials');
+      return res.status(500).json({ 
+        success: false, 
+        message: 'SMS verification service is not configured',
+        debug: { 
+          hasSid: !!accountSid, 
+          hasToken: !!authToken, 
+          hasVerifySid: !!verifySid 
+        }
+      });
+    }
+    
+    // Make request to Twilio API
+    const twilioUrl = `https://verify.twilio.com/v2/Services/${verifySid}/Verifications`;
+    
+    const twilioResponse = await fetch(twilioUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`
+      },
+      body: new URLSearchParams({
+        To: phoneNumber,
+        Channel: 'sms'
+      })
+    });
+    
+    const twilioData = await twilioResponse.json();
+    
+    if (!twilioResponse.ok) {
+      console.error('Twilio API error:', twilioData);
+      return res.status(twilioResponse.status).json({ 
+        success: false, 
+        message: 'Failed to send verification SMS',
+        error: twilioData
+      });
+    }
+    
+    return res.json({ success: true, data: twilioData });
+  } catch (error) {
+    console.error('Error sending verification SMS:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+app.post('/api/verify-code', async (req, res) => {
+  try {
+    const { phoneNumber, code } = req.body;
+    
+    if (!phoneNumber || !code) {
+      return res.status(400).json({ success: false, message: 'Phone number and code are required' });
+    }
+    
+    console.log(`Verifying code for ${phoneNumber}`);
+    
+    // Check if we have Twilio credentials
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const verifySid = process.env.TWILIO_VERIFY_SERVICE_SID;
+    
+    if (!accountSid || !authToken || !verifySid) {
+      console.error('Missing Twilio credentials');
+      return res.status(500).json({ success: false, message: 'SMS verification service is not configured' });
+    }
+    
+    // Make request to Twilio API
+    const twilioUrl = `https://verify.twilio.com/v2/Services/${verifySid}/VerificationCheck`;
+    
+    const twilioResponse = await fetch(twilioUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`
+      },
+      body: new URLSearchParams({
+        To: phoneNumber,
+        Code: code
+      })
+    });
+    
+    const twilioData = await twilioResponse.json();
+    
+    if (!twilioResponse.ok) {
+      console.error('Twilio API error:', twilioData);
+      return res.status(twilioResponse.status).json({ 
+        success: false, 
+        message: 'Failed to verify code',
+        error: twilioData
+      });
+    }
+    
+    return res.json({ success: true, data: twilioData });
+  } catch (error) {
+    console.error('Error verifying code:', error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
