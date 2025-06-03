@@ -4,6 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { processAudio, cleanupAllFiles, transcribeWithGemini } from './Transcribe_and_summarize/directAudioProcessor.js';
 import db from './db.js';
 import bcrypt from 'bcryptjs';
@@ -39,6 +40,10 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
+// Get __dirname equivalent in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 // Serve static files from the frontend build directory
 const frontendPath = path.join(__dirname, '../Student_summary/dist');
 console.log(`Serving static files from: ${frontendPath}`);
@@ -53,9 +58,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Middleware to check authentication
 const authMiddleware = (req, res, next) => {
