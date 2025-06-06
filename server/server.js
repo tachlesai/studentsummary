@@ -1443,8 +1443,35 @@ app.get('/api/all-flashcards', async (req, res) => {
     let userEmail = null;
     const token = req.headers.authorization?.split(' ')[1];
     
+    console.log('Token received:', token ? `${token.substring(0, 15)}...` : 'none');
+    
     if (token) {
-      userEmail = getUserEmailFromToken(token);
+      // Check if token starts with "mock." - handle special mock tokens
+      if (token.startsWith('mock.')) {
+        try {
+          // Extract the base64 part (remove mock. and anything after the dot)
+          const base64Part = token.substring(5).split('.')[0];
+          console.log('Extracted base64 part:', base64Part);
+          
+          // Decode the base64 token
+          const decoded = Buffer.from(base64Part, 'base64').toString('utf-8');
+          console.log('Decoded token content:', decoded);
+          
+          // Parse the JSON
+          const tokenData = JSON.parse(decoded);
+          
+          if (tokenData && tokenData.email) {
+            userEmail = tokenData.email;
+            console.log('Found email in mock token:', userEmail);
+          }
+        } catch (mockErr) {
+          console.error('Error parsing mock token:', mockErr);
+        }
+      } else {
+        // Use the regular getUserEmailFromToken function
+        userEmail = getUserEmailFromToken(token);
+      }
+      
       console.log('User email from token:', userEmail);
     } else {
       console.log('No authorization token provided');
@@ -1455,6 +1482,13 @@ app.get('/api/all-flashcards', async (req, res) => {
       console.log('No valid user email found, returning empty array');
       return res.json([]);
     }
+    
+    // For debugging - check if this user has any flashcard sets
+    const setsQuery = `
+      SELECT id, title FROM flashcard_sets WHERE user_email = $1
+    `;
+    const setsResult = await db.query(setsQuery, [userEmail]);
+    console.log(`User ${userEmail} has ${setsResult.rows.length} flashcard sets:`, setsResult.rows);
     
     // Get all sets and their flashcards for this user
     const query = `
@@ -1478,11 +1512,96 @@ app.get('/api/all-flashcards', async (req, res) => {
     const result = await db.query(query, [userEmail]);
     console.log(`Found ${result.rows.length} flashcards for user ${userEmail}`);
     
+    // If there are no flashcards, check if the user exists in the database
+    if (result.rows.length === 0) {
+      const userQuery = `SELECT * FROM users WHERE email = $1`;
+      const userResult = await db.query(userQuery, [userEmail]);
+      
+      if (userResult.rows.length === 0) {
+        console.log(`User ${userEmail} not found in database`);
+        return res.json([]);
+      } else {
+        console.log(`User ${userEmail} exists in database but has no flashcards`);
+        
+        // For development/testing - provide some demo flashcards
+        // This helps users test the games functionality without having to create flashcards
+        const demoFlashcards = [
+          {
+            id: 1001,
+            question: 'מהו האיבר הגדול ביותר בגוף האדם?',
+            answer: 'העור',
+            wrong_answers: ['הכבד', 'המוח', 'הלב'],
+            set_id: 1001,
+            set_title: 'סט כרטיסיות לדוגמה - אנטומיה'
+          },
+          {
+            id: 1002,
+            question: 'כמה עצמות יש בגוף האדם?',
+            answer: '206',
+            wrong_answers: ['180', '250', '300'],
+            set_id: 1001,
+            set_title: 'סט כרטיסיות לדוגמה - אנטומיה'
+          },
+          {
+            id: 1003,
+            question: 'איזה איבר אחראי על סינון הדם?',
+            answer: 'הכליות',
+            wrong_answers: ['הכבד', 'הטחול', 'הריאות'],
+            set_id: 1001,
+            set_title: 'סט כרטיסיות לדוגמה - אנטומיה'
+          },
+          {
+            id: 1004,
+            question: 'איזה חלק במוח אחראי על הזיכרון?',
+            answer: 'ההיפוקמפוס',
+            wrong_answers: ['האמיגדלה', 'קליפת המוח', 'הצרבלום'],
+            set_id: 1001,
+            set_title: 'סט כרטיסיות לדוגמה - אנטומיה'
+          },
+          {
+            id: 1005,
+            question: 'מהי בירת צרפת?',
+            answer: 'פריז',
+            wrong_answers: ['לונדון', 'ברלין', 'מדריד'],
+            set_id: 1002,
+            set_title: 'סט כרטיסיות לדוגמה - גיאוגרפיה'
+          },
+          {
+            id: 1006,
+            question: 'מהי המדינה הגדולה ביותר בעולם?',
+            answer: 'רוסיה',
+            wrong_answers: ['קנדה', 'סין', 'ארצות הברית'],
+            set_id: 1002,
+            set_title: 'סט כרטיסיות לדוגמה - גיאוגרפיה'
+          },
+          {
+            id: 1007,
+            question: 'באיזו יבשת נמצאת מצרים?',
+            answer: 'אפריקה',
+            wrong_answers: ['אסיה', 'אירופה', 'המזרח התיכון'],
+            set_id: 1002,
+            set_title: 'סט כרטיסיות לדוגמה - גיאוגרפיה'
+          },
+          {
+            id: 1008,
+            question: 'איזה אוקיינוס הוא הגדול ביותר?',
+            answer: 'האוקיינוס השקט',
+            wrong_answers: ['האוקיינוס האטלנטי', 'האוקיינוס ההודי', 'האוקיינוס הארקטי'],
+            set_id: 1002,
+            set_title: 'סט כרטיסיות לדוגמה - גיאוגרפיה'
+          }
+        ];
+        
+        console.log('Returning demo flashcards for testing');
+        return res.json(demoFlashcards);
+      }
+    }
+    
     // Return all flashcards for this user
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching flashcards:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 });
 
