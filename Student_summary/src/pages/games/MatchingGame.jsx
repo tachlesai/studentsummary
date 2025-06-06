@@ -49,79 +49,58 @@ const MatchingGame = () => {
     }
   };
 
-  // Process the fetched flashcards into a format suitable for the game
-  const processFlashcards = (rawFlashcards) => {
-    console.log('Processing raw flashcards:', rawFlashcards);
-    
-    if (!rawFlashcards || rawFlashcards.length === 0) {
-      console.log('No flashcards available');
-      return [];
-    }
-    
-    // Group flashcards by set_id
-    const groupedBySet = rawFlashcards.reduce((sets, card) => {
-      const setId = card.set_id;
-      if (!sets[setId]) {
-        sets[setId] = {
-          id: setId,
-          title: card.set_title || 'Unnamed Set',
-          flashcards: []
-        };
-      }
-      
-      // Process the card
-      const processedCard = {
-        id: card.id,
-        question: card.question,
-        answer: card.answer,
-        incorrectAnswers: Array.isArray(card.wrong_answers) ? card.wrong_answers : []
-      };
-      
-      // Handle JSONB wrong_answers field
-      if (card.wrong_answers && typeof card.wrong_answers === 'object' && !Array.isArray(card.wrong_answers)) {
-        // If it's a JSONB object, convert to array
-        processedCard.incorrectAnswers = Object.values(card.wrong_answers);
-      }
-      
-      sets[setId].flashcards.push(processedCard);
-      return sets;
-    }, {});
-    
-    // Convert to array
-    const flashcardSets = Object.values(groupedBySet);
-    console.log('Processed flashcard sets:', flashcardSets);
-    
-    return flashcardSets;
-  };
-
+  // Directly fetch flashcards when component mounts
   useEffect(() => {
-    console.log('MATCHING GAME - COMPONENT MOUNTED');
-    
-    const loadFlashcards = async () => {
-      setLoading(true);
+    const fetchAllFlashcards = async () => {
       try {
-        const rawFlashcards = await fetchFlashcards();
-        const flashcardSets = processFlashcards(rawFlashcards);
+        setLoading(true);
+        console.log("MATCHING GAME - Directly fetching all flashcards");
         
-        console.log('Available flashcard sets:', flashcardSets);
-        console.log('Are sets available?', flashcardSets.length > 0);
+        const data = await fetchFlashcards();
+        console.log("Fetched flashcards:", data);
         
-        if (flashcardSets.length > 0) {
-          setFlashcardSets(flashcardSets);
-          setSelectedSetId(flashcardSets[0].id);
+        // Group flashcards by set for selection
+        const groupedBySet = {};
+        
+        data.forEach(card => {
+          if (!groupedBySet[card.set_id]) {
+            groupedBySet[card.set_id] = {
+              id: card.set_id,
+              title: card.set_title || `Flashcard Set ${card.set_id}`,
+              flashcards: []
+            };
+          }
+          
+          groupedBySet[card.set_id].flashcards.push({
+            id: card.id,
+            question: card.question,
+            answer: card.answer
+          });
+        });
+        
+        console.log("Grouped flashcards by set:", groupedBySet);
+        
+        // Update state with sets that have flashcards
+        const setsArray = Object.values(groupedBySet).filter(set => set.flashcards.length > 0);
+        if (setsArray.length > 0) {
+          setFlashcardSets(setsArray);
         } else {
-          setFlashcardSets([]);
-          setSelectedSetId(null);
+          console.log("No flashcard sets with cards found");
         }
-      } catch (error) {
-        console.error('Error loading flashcards:', error);
+      } catch (err) {
+        console.error("Error fetching flashcards:", err);
+        toast({
+          title: "Error",
+          description: "Failed to load flashcards",
+          variant: "destructive"
+        });
       } finally {
         setLoading(false);
       }
     };
     
-    loadFlashcards();
-  }, []);
+    fetchAllFlashcards();
+  }, [toast]);
 
   useEffect(() => {
     return () => {

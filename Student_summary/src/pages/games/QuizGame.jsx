@@ -23,113 +23,97 @@ const QuizGame = () => {
   const [selectedSetId, setSelectedSetId] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [flashcardSets, setFlashcardSets] = useState([]);
-  const [selectedSet, setSelectedSet] = useState(null);
-  const [loading, setLoading] = useState(true);
   
   // Get hook with all needed functions
+  const { loading } = useFlashcards();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Process the fetched flashcards into a format suitable for the game
-  const processFlashcards = (rawFlashcards) => {
-    console.log('Processing raw flashcards:', rawFlashcards);
-    
-    if (!rawFlashcards || rawFlashcards.length === 0) {
-      console.log('No flashcards available');
-      return [];
-    }
-    
-    // Group flashcards by set_id
-    const groupedBySet = rawFlashcards.reduce((sets, card) => {
-      const setId = card.set_id;
-      if (!sets[setId]) {
-        sets[setId] = {
-          id: setId,
-          title: card.set_title || 'Unnamed Set',
-          flashcards: []
-        };
-      }
-      
-      // Process the card
-      const processedCard = {
-        id: card.id,
-        question: card.question,
-        answer: card.answer,
-        incorrectAnswers: Array.isArray(card.wrong_answers) ? card.wrong_answers : []
-      };
-      
-      // Handle JSONB wrong_answers field
-      if (card.wrong_answers && typeof card.wrong_answers === 'object' && !Array.isArray(card.wrong_answers)) {
-        // If it's a JSONB object, convert to array
-        processedCard.incorrectAnswers = Object.values(card.wrong_answers);
-      }
-      
-      sets[setId].flashcards.push(processedCard);
-      return sets;
-    }, {});
-    
-    // Convert to array
-    const flashcardSets = Object.values(groupedBySet);
-    console.log('Processed flashcard sets:', flashcardSets);
-    
-    return flashcardSets;
-  };
-
+  // Directly fetch flashcards when component mounts
   useEffect(() => {
-    console.log('QUIZ GAME - COMPONENT MOUNTED');
-    
-    const loadFlashcards = async () => {
+    const fetchAllFlashcards = async () => {
       try {
-        const rawFlashcards = await fetchFlashcards();
-        const flashcardSets = processFlashcards(rawFlashcards);
+        console.log("QUIZ GAME - Directly fetching all flashcards");
         
-        console.log('Available flashcard sets:', flashcardSets);
-        console.log('Are sets available?', flashcardSets.length > 0);
+        // Use getAuthToken instead of directly accessing localStorage
+        const token = getAuthToken();
         
-        // Check token
-        const token = localStorage.getItem('token');
-        console.log('Token exists:', token ? `${token.substring(0, 15)}...` : 'none');
-        
-        // Try to decode token
-        if (token) {
-          try {
-            let tokenContents = null;
-            
-            if (token.startsWith('mock.')) {
-              // Handle mock token format
-              const base64Part = token.substring(5).split('.')[0];
-              const decoded = atob(base64Part);
-              tokenContents = JSON.parse(decoded);
-            } else if (token.split('.').length === 3) {
-              // Handle JWT format
-              const base64Url = token.split('.')[1];
-              const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-              const decoded = atob(base64);
-              tokenContents = JSON.parse(decoded);
-            }
-            
-            console.log('Token contents:', tokenContents);
-          } catch (e) {
-            console.error('Error decoding token:', e);
+        // Use API_BASE_URL instead of hardcoded URL
+        const response = await fetch(`${API_BASE_URL}/all-flashcards`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
           }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Error: ${response.status}`);
         }
         
-        if (flashcardSets.length > 0) {
-          setFlashcardSets(flashcardSets);
-          setSelectedSet(flashcardSets[0]);
+        const data = await response.json();
+        console.log("Fetched flashcards:", data);
+        
+        // Group flashcards by set for selection
+        const groupedBySet = {};
+        
+        data.forEach(card => {
+          if (!groupedBySet[card.set_id]) {
+            groupedBySet[card.set_id] = {
+              id: card.set_id,
+              title: card.set_title || `Flashcard Set ${card.set_id}`,
+              flashcards: []
+            };
+          }
+          
+          groupedBySet[card.set_id].flashcards.push({
+            id: card.id,
+            question: card.question,
+            answer: card.answer,
+            wrongAnswers: card.wrong_answers || []
+          });
+        });
+        
+        console.log("Grouped flashcards by set:", groupedBySet);
+        
+        // Update state with sets that have flashcards
+        const setsArray = Object.values(groupedBySet).filter(set => set.flashcards.length > 0);
+        if (setsArray.length > 0) {
+          setFlashcardSets(setsArray);
         } else {
-          setFlashcardSets([]);
-          setSelectedSet(null);
+          console.log("No flashcard sets with cards found");
         }
-      } catch (error) {
-        console.error('Error loading flashcards:', error);
-      } finally {
-        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching flashcards:", err);
+        toast({
+          title: "Error",
+          description: "Failed to load flashcards",
+          variant: "destructive"
+        });
       }
     };
     
-    loadFlashcards();
-  }, []);
+    fetchAllFlashcards();
+  }, [toast]);
+
+  useEffect(() => {
+    console.log("QUIZ GAME - COMPONENT MOUNTED");
+    console.log("Available flashcard sets:", flashcardSets);
+    console.log("Are sets available?", flashcardSets && flashcardSets.length > 0);
+    
+    // Check localStorage token
+    const token = localStorage.getItem('token');
+    if (token) {
+      console.log("Token exists:", token.substring(0, 20) + "...");
+      try {
+        const payload = token.includes('.') ? token.split('.')[1] : token;
+        const decoded = atob(payload);
+        console.log("Token contents:", decoded);
+      } catch (err) {
+        console.log("Error decoding token:", err);
+      }
+    } else {
+      console.log("No token found in localStorage");
+    }
+  }, [flashcardSets]);
 
   // Format time
   const formatTime = (ms) => {
