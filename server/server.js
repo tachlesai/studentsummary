@@ -568,6 +568,19 @@ app.post('/api/process-audio', authMiddleware, flexibleUpload, async (req, res) 
         summaryId = dbResult.rows[0].id;
         console.log(`Summary saved to database with ID: ${summaryId}`);
         
+        // Update usage count after successfully saving the summary
+        try {
+          const updateResult = await db.query(
+            'UPDATE users SET usage_count = usage_count + 1 WHERE email = $1 RETURNING usage_count',
+            [req.user.email]
+          );
+          const newUsageCount = updateResult.rows[0]?.usage_count || 0;
+          console.log(`Incremented usage_count for user ${req.user.email} to ${newUsageCount}`);
+        } catch (usageError) {
+          console.error('Error updating usage count:', usageError);
+          // Continue with the response even if usage update fails
+        }
+        
         // Generate and save flashcards if summary was created
         if (summaryId && !onlyTranscribe) {
           console.log('Generating flashcards for summary...');
@@ -751,6 +764,19 @@ app.post('/api/process-recording', async (req, res) => {
             const dbResult = await db.query(query, values);
             summaryId = dbResult.rows[0].id;
             console.log(`Summary saved to database with ID: ${summaryId}`);
+            
+            // Update usage count after successfully saving the summary
+            try {
+              const updateResult = await db.query(
+                'UPDATE users SET usage_count = usage_count + 1 WHERE email = $1 RETURNING usage_count',
+                [userEmail]
+              );
+              const newUsageCount = updateResult.rows[0]?.usage_count || 0;
+              console.log(`Incremented usage_count for user ${userEmail} to ${newUsageCount}`);
+            } catch (usageError) {
+              console.error('Error updating usage count:', usageError);
+              // Continue with the response even if usage update fails
+            }
             
             // Generate and save flashcards if summary was created
             if (summaryId && !onlyTranscribe) {
