@@ -1,15 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import API_BASE_URL from '../config';
 import { setUser, setToken } from '../utils/auth';
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [redirectMessage, setRedirectMessage] = useState('');
+
+  // Check if user was redirected from a protected route
+  useEffect(() => {
+    // Check if there's a redirect state
+    if (location.state && location.state.from) {
+      setRedirectMessage('יש להתחבר כדי לגשת לדף המבוקש');
+    }
+  }, [location]);
 
   // Clear any previous user data when loading login page
   useEffect(() => {
@@ -55,9 +65,13 @@ function Login() {
         setUser(data.user);
         setSuccess(true);
         
-        // Redirect to home page after 2 seconds
+        // Redirect to the original page if there was a redirect, otherwise go to home
         setTimeout(() => {
-          navigate('/');
+          if (location.state && location.state.from) {
+            navigate(location.state.from);
+          } else {
+            navigate('/');
+          }
           window.location.reload();
         }, 2000);
       } else {
@@ -102,9 +116,13 @@ function Login() {
         setUser(data.user);
         setSuccess(true);
         
-        // Redirect to home page after 2 seconds
+        // Redirect to the original page if there was a redirect, otherwise go to home
         setTimeout(() => {
-          navigate('/');
+          if (location.state && location.state.from) {
+            navigate(location.state.from);
+          } else {
+            navigate('/');
+          }
           window.location.reload();
         }, 2000);
       } else {
@@ -155,6 +173,20 @@ function Login() {
           maxWidth: '400px',
           margin: '0 auto'
         }}>
+          {redirectMessage && (
+            <div style={{
+              backgroundColor: '#e6f2ff',
+              color: '#0066cc',
+              padding: '16px',
+              borderRadius: '8px',
+              textAlign: 'center',
+              fontSize: '16px',
+              marginBottom: '24px'
+            }}>
+              {redirectMessage}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {error && (
               <div style={{

@@ -20,6 +20,8 @@ import MatchingGame from './pages/games/MatchingGame';
 import QuizGame from './pages/games/QuizGame';
 import SpeedChallengeGame from './pages/games/SpeedChallengeGame';
 import DevUserSwitcher from './components/DevUserSwitcher';
+// Import ProtectedRoute component
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
@@ -35,18 +37,60 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<SignUp />} />
               <Route path="/signup-success" element={<SignupSuccess />} />
-              <Route path="/dashboard" element={<StudentDashboard />} />
-              <Route path="/summary-result" element={<SummaryResult />} />
-              <Route path="/record-audio" element={<AudioRecordingPage />} />
-              <Route path="/membership-payment" element={<MembershipPayment />} />
-              <Route path="/account-details" element={<AccountDetails />} />
-              <Route path="/payment-confirmation" element={<PaymentConfirmation />} />
               
-              {/* Game Routes */}
-              <Route path="/games" element={<GamesPage />} />
-              <Route path="/games/matching" element={<MatchingGame />} />
-              <Route path="/games/quiz" element={<QuizGame />} />
-              <Route path="/games/speed-challenge" element={<SpeedChallengeGame />} />
+              {/* Protected Routes - Require Authentication */}
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
+                  <StudentDashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/summary-result" element={
+                <ProtectedRoute>
+                  <SummaryResult />
+                </ProtectedRoute>
+              } />
+              <Route path="/record-audio" element={
+                <ProtectedRoute>
+                  <AudioRecordingPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/membership-payment" element={
+                <ProtectedRoute>
+                  <MembershipPayment />
+                </ProtectedRoute>
+              } />
+              <Route path="/account-details" element={
+                <ProtectedRoute>
+                  <AccountDetails />
+                </ProtectedRoute>
+              } />
+              <Route path="/payment-confirmation" element={
+                <ProtectedRoute>
+                  <PaymentConfirmation />
+                </ProtectedRoute>
+              } />
+              
+              {/* Game Routes - Protected */}
+              <Route path="/games" element={
+                <ProtectedRoute>
+                  <GamesPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/games/matching" element={
+                <ProtectedRoute>
+                  <MatchingGame />
+                </ProtectedRoute>
+              } />
+              <Route path="/games/quiz" element={
+                <ProtectedRoute>
+                  <QuizGame />
+                </ProtectedRoute>
+              } />
+              <Route path="/games/speed-challenge" element={
+                <ProtectedRoute>
+                  <SpeedChallengeGame />
+                </ProtectedRoute>
+              } />
             </Routes>
           </div>
           <DevUserSwitcher />

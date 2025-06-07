@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/SignUp.css';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import '../styles/SignUp.css';
 import API_BASE_URL from '../config';
 import { sendVerificationSMS, verifyCode } from '../utils/twilio';
@@ -8,6 +8,7 @@ import { setUser, setToken } from '../utils/auth';
 
 const SignUp = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -20,6 +21,15 @@ const SignUp = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [redirectMessage, setRedirectMessage] = useState('');
+
+  // Check if user was redirected from a protected route
+  useEffect(() => {
+    // Check if there's a redirect state
+    if (location.state && location.state.from) {
+      setRedirectMessage('יש להירשם כדי לגשת לדף המבוקש');
+    }
+  }, [location]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -86,8 +96,13 @@ const SignUp = () => {
           setUser(data.user);
           setToken(data.token);
           
-          // Redirect to dashboard
-          navigate('/dashboard');
+          // Redirect to the original page if there was a redirect, otherwise go to dashboard
+          if (location.state && location.state.from) {
+            navigate(location.state.from);
+          } else {
+            // Redirect to dashboard
+            navigate('/dashboard');
+          }
         } else {
           setError('Invalid verification code. Please try again.');
         }
@@ -109,6 +124,11 @@ const SignUp = () => {
 
       <div className="mt-8" style={{ maxWidth: '900px', width: '100%' }}>
         <div className="bg-white py-12 px-8 shadow sm:rounded-lg sm:px-16" style={{ maxWidth: '900px', width: '100%' }}>
+          {redirectMessage && (
+            <div className="mb-4 p-4 bg-blue-50 text-blue-700 rounded-md text-center">
+              {redirectMessage}
+            </div>
+          )}
           <form className="space-y-6" onSubmit={handleSubmit}>
             {step === 1 ? (
               <>

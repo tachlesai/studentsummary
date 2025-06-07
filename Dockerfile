@@ -19,6 +19,14 @@ FROM node:18.16.1
 
 WORKDIR /app
 
+# Install FFmpeg and other required audio processing dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libasound2 \
+    libsndfile1 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy server files
 COPY server ./server/
 COPY package*.json ./
